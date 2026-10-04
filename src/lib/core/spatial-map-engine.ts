@@ -221,10 +221,7 @@ export class SpatialMapEngine {
         limits.maxZoom ?? this.cameraLimits.maxZoom,
       ),
     };
-    // The Camera instance lives inside CameraTransitions, so a fresh Camera
-    // is not available here; recreate the limit through the transition API
-    // on the next setZoom/fitBounds call. The public view settings in the host
-    // component use setZoom() immediately after changing these bounds.
+    this.transitions?.setZoomLimits(this.cameraLimits);
   }
 
   setGridEnabled(enabled: boolean): void {
