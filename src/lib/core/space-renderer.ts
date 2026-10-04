@@ -455,9 +455,9 @@ export class SpaceRenderer {
       const isSelected = this.selectedIds.has(id);
       const visible = isSelected || isSearch || isFocus;
 
-      const focusIntensity = isFocus && !isSelected && !isSearch
-        ? 1
-        : 1;
+      // Fly-to rope remains fully visible for its complete configured duration;
+      // the timer ends the focus state rather than fading the rope early.
+      const focusIntensity = 1;
 
       this.drawPressShadow(
         entry.pressShadow,
