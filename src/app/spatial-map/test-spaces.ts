@@ -78,7 +78,6 @@ const booth = (
   properties: {
     name,
     status,
-    displayColor: '#ffffff',
     displayStrokeColor: '#15191d',
     displayTextColor: '#101820',
     displayTextOutlineColor: '#ffffff',
