@@ -728,6 +728,39 @@ export class SpaceRenderer {
           geometry.height / 2,
         );
         break;
+      case 'rounded-rectangle':
+        entry.shape.roundRect(
+          0,
+          0,
+          geometry.width,
+          geometry.height,
+          Math.min(16, Math.min(geometry.width, geometry.height) * 0.18),
+        );
+        break;
+      case 'triangle':
+        entry.shape.poly([
+          geometry.width / 2, 0,
+          geometry.width, geometry.height,
+          0, geometry.height,
+        ]);
+        break;
+      case 'diamond':
+        entry.shape.poly([
+          geometry.width / 2, 0,
+          geometry.width, geometry.height / 2,
+          geometry.width / 2, geometry.height,
+          0, geometry.height / 2,
+        ]);
+        break;
+      case 'line':
+        entry.shape.roundRect(
+          0,
+          0,
+          geometry.width,
+          Math.max(2, geometry.height),
+          Math.max(1, geometry.height / 2),
+        );
+        break;
       case 'rectangle':
       default:
         entry.shape.rect(0, 0, geometry.width, geometry.height);
@@ -818,6 +851,39 @@ export class SpaceRenderer {
         }
         case 'ellipse':
           glass.ellipse(pad + w / 2, pad + h / 2, w / 2, h / 2);
+          break;
+        case 'rounded-rectangle':
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            h,
+            inner ? Math.max(2, radius - 3) : radius,
+          );
+          break;
+        case 'triangle':
+          glass.poly([
+            pad + w / 2, pad,
+            pad + w, pad + h,
+            pad, pad + h,
+          ]);
+          break;
+        case 'diamond':
+          glass.poly([
+            pad + w / 2, pad,
+            pad + w, pad + h / 2,
+            pad + w / 2, pad + h,
+            pad, pad + h / 2,
+          ]);
+          break;
+        case 'line':
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            Math.max(2, h),
+            Math.max(1, h / 2),
+          );
           break;
         case 'rectangle':
         default:
