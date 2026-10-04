@@ -307,8 +307,8 @@ export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
   // Branding / labels
   // ------------------------------------------------------------------------
-  imageProp('market-logo', 'Riverside Outdoor Market', 48, 92, 250, 82, logoImage()),
-  textbox('north-title', 'NORTH BAZAAR', 286, 112, 228, 28),
+  imageProp('market-logo', 'Riverside Outdoor Market', 28, 18, 250, 76, logoImage()),
+  textbox('north-title', 'NORTH BAZAAR', 308, 112, 198, 28),
   textbox('garden-title', 'GARDEN MARKET', 834, 112, 238, 28),
   textbox('food-title', 'FOOD COURT', 280, 528, 190, 28),
   textbox('river-title', 'RIVERSIDE ROW', 876, 528, 210, 28),
