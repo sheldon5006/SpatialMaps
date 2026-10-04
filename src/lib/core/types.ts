@@ -4,39 +4,94 @@
  * their integrations against.
  */
 
-export type SpaceStatus =
-  | 'available'
-  | 'reserved'
-  | 'booked'
-  | 'unavailable'
-  | 'maintenance'
-  | 'selected';
+/** A business status assigned to a map space. "all" and "selected" are UI
+ * filters, not statuses, so they deliberately do not belong here. */
+export type SpaceStatus = string;
 
-export interface RectangleGeometry {
-  type: 'rectangle';
+export interface MapStatusDefinition {
+  key: string;
+  label: string;
+  color: string;
+}
+
+/** High-level role of a map element. */
+export type SpaceElementType = 'booth' | 'prop' | 'textbox';
+
+export type MapTheme = 'dark' | 'light';
+
+/** Basic infrastructure/prop vocabulary for venue and market maps. */
+interface BaseGeometry {
   x: number;
   y: number;
   width: number;
   height: number;
-  /** Degrees, clockwise, around the rectangle's center. */
+  /** Degrees, clockwise, around the geometry's center. */
   rotation?: number;
 }
 
-// Future geometry kinds (polygon, circle) join this union without
-// touching code that only cares about "a space has geometry".
-export type SpaceGeometry = RectangleGeometry;
+export interface RectangleGeometry extends BaseGeometry {
+  type: 'rectangle';
+}
+
+export interface RoundedRectangleGeometry extends BaseGeometry {
+  type: 'rounded-rectangle';
+}
+
+export interface CircleGeometry extends BaseGeometry {
+  type: 'circle';
+}
+
+export interface EllipseGeometry extends BaseGeometry {
+  type: 'ellipse';
+}
+
+export interface TriangleGeometry extends BaseGeometry {
+  type: 'triangle';
+}
+
+export interface DiamondGeometry extends BaseGeometry {
+  type: 'diamond';
+}
+
+/**
+ * A thin rotated segment. Its width represents the path/line length and
+ * height represents its thickness.
+ */
+export interface LineGeometry extends BaseGeometry {
+  type: 'line';
+}
+
+/** Basic vector shapes for building simple venue/market maps. */
+export type SpaceGeometry =
+  | RectangleGeometry
+  | RoundedRectangleGeometry
+  | CircleGeometry
+  | EllipseGeometry
+  | TriangleGeometry
+  | DiamondGeometry
+  | LineGeometry;
 
 export interface SpaceProperties {
   name?: string;
   status?: SpaceStatus;
+  /** Custom hex color for prop/infrastructure vector elements (for example "#4ade80"). */
+  propColor?: string;
   /** Rendered as an image fill on top of the status color when set. */
   imageUrl?: string;
+  /** Shows the stored name as visible text on a prop when enabled. */
+  textVisible?: boolean;
+  /** Optional per-element visual overrides for cartographic fixtures/themes. */
+  displayColor?: string;
+  displayStrokeColor?: string;
+  displayTextColor?: string;
+  displayTextOutlineColor?: string;
   [key: string]: unknown;
 }
 
 export interface Space {
   id: string;
-  type?: string;
+  /** Map element role. Kept as a string-compatible field for future custom roles. */
+  type?: SpaceElementType | string;
   geometry: SpaceGeometry;
   properties: SpaceProperties;
 }
@@ -59,16 +114,15 @@ export interface StatusStyle {
   strokeWidth?: number;
 }
 
-export type StatusStyleMap = Partial<Record<SpaceStatus, StatusStyle>>;
+export type StatusStyleMap = Partial<Record<string, StatusStyle>>;
 
 /** Placeholder palette — developers are expected to override this. */
-export const DEFAULT_STATUS_STYLES: Required<StatusStyleMap> = {
+export const DEFAULT_STATUS_STYLES: StatusStyleMap = {
   available: { fill: 0x2ecc71, stroke: 0x1b8a4e, strokeWidth: 1 },
   reserved: { fill: 0xf1c40f, stroke: 0xa98307, strokeWidth: 1 },
   booked: { fill: 0xe67e22, stroke: 0xa85a14, strokeWidth: 1 },
   unavailable: { fill: 0x7f8c8d, stroke: 0x56605f, strokeWidth: 1 },
   maintenance: { fill: 0x9b59b6, stroke: 0x6c3d80, strokeWidth: 1 },
-  selected: { fill: 0x3498db, stroke: 0x1f618d, strokeWidth: 2 },
 };
 
 export const FALLBACK_STATUS_STYLE: StatusStyle = {

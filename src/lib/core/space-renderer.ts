@@ -13,6 +13,7 @@ import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
+  MapTheme,
   SpaceStatus,
   StatusStyle,
   StatusStyleMap,
@@ -21,6 +22,7 @@ import {
 const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
 const SELECTED_STROKE_WIDTH = 3;
+const SELECTED_COLOR = 0x3498db;
 
 const CHECK_BADGE_RADIUS = 8;
 const CHECK_BADGE_MARGIN = 6;
@@ -42,18 +44,33 @@ const LABEL_MIN_WIDTH = 28;
 const LABEL_MIN_HEIGHT = 20;
 
 /**
- * Filter recede: frost the booth content slightly, then sit a sharp glass
- * pane on top (sheen + rim). Blur must not include the pane itself, or the
- * overlay smears and reads as a dim instead of glass.
+ * Filter-only recede effect.
+ *
+ * IMPORTANT: selecting a booth does NOT trigger this effect. The effect is
+ * driven exclusively by an explicit visual filter (status or "selected").
+ * Matching booths stay crisp; non-matching booths get a subtle frosted-glass
+ * treatment with only a small amount of blur so the map remains readable.
  */
-const CONTENT_FROST_BLUR = 1.15;
-const GLASS_PANE_COLOR = 0xeef6ff;
-const GLASS_PANE_ALPHA = 0.4;
-const GLASS_SHEEN_COLOR = 0xffffff;
-const GLASS_SHEEN_ALPHA = 0.3;
-const GLASS_HIGHLIGHT_ALPHA = 0.55;
-const GLASS_RIM_COLOR = 0xffffff;
-const GLASS_RIM_ALPHA = 0.78;
+/**
+ * Liquid-glass treatment used ONLY on booths receded by an active visual
+ * filter. This is intentionally vector-based: no blur filter, no backdrop
+ * blur, and no status mutation. The layered translucent body/rims/highlights
+ * create a light-catching "liquid" surface while the booth underneath stays
+ * recognizable.
+ */
+const FILTER_GLASS_TINT_COLOR = 0xeaf4ff;
+const FILTER_GLASS_TINT_ALPHA = 0.10;
+const FILTER_GLASS_BODY_COLOR = 0xffffff;
+const FILTER_GLASS_BODY_ALPHA = 0.045;
+const FILTER_GLASS_RIM_COLOR = 0xffffff;
+const FILTER_GLASS_RIM_ALPHA = 0.72;
+const FILTER_GLASS_INNER_RIM_ALPHA = 0.30;
+const FILTER_GLASS_DARK_RIM_COLOR = 0x8ea5bf;
+const FILTER_GLASS_DARK_RIM_ALPHA = 0.22;
+const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
+
+/** Very light content blur used only on booths receded by an active filter. */
+const FILTER_CONTENT_BLUR = 0.9;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
@@ -86,6 +103,7 @@ export type VisualFilter =
 export type SelectionRule = (space: Space) => boolean;
 
 const DEFAULT_SELECTION_RULE: SelectionRule = (space) => {
+  if (space.type !== 'booth') return false;
   const status = space.properties.status;
   return status === 'available' || status === 'reserved';
 };
@@ -116,12 +134,15 @@ export interface SpaceRendererEvents extends Record<string, unknown> {
  * so the rect is drawn by a Graphics but never parents anything itself —
  * the plain Container is what attachments hang off of.
  */
+type ResizeCorner = 'nw' | 'ne' | 'se' | 'sw';
+
 interface SpaceNode {
   node: Container;
   shape: Graphics;
   handle: Graphics;
+  resizeHandles: Record<ResizeCorner, Graphics>;
   label: Text;
-  /** The "glass pane" drawn over a space when it's receded behind focus. */
+  /** Liquid-glass overlay drawn over a space when an active filter recedes it. */
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
@@ -148,6 +169,11 @@ interface SpaceNode {
 export class SpaceRenderer {
   private readonly spaceNodes = new Map<string, SpaceNode>();
   private readonly spaceData = new Map<string, Space>();
+  private readonly grid = new Graphics();
+  private readonly contentBlurFilter = new BlurFilter({
+    strength: FILTER_CONTENT_BLUR,
+    quality: 2,
+  });
   private statusStyles: StatusStyleMap = DEFAULT_STATUS_STYLES;
 
   private hoveredId: string | null = null;
@@ -157,6 +183,10 @@ export class SpaceRenderer {
 
   private mode: MapMode = 'view';
   private visualFilter: VisualFilter = { type: 'all' };
+  private gridEnabled = true;
+  private lastLabelZoom = -1;
+  private gridSize = 50;
+  private theme: MapTheme = 'dark';
 
   private draggingId: string | null = null;
   private dragStartPointerX = 0;
@@ -168,30 +198,24 @@ export class SpaceRenderer {
   private rotateCenterX = 0;
   private rotateCenterY = 0;
 
+  private resizingId: string | null = null;
+  private resizingCorner: ResizeCorner | null = null;
+  private resizeStartGeometry: Space['geometry'] | null = null;
+
   readonly events = new TypedEmitter<SpaceRendererEvents>();
-
-  /** Shared instances — applying the same filter to multiple display
-   *  objects is fine in Pixi and avoids allocating GPU filters per space.
-   *  Low strength + a fixed 4px padding keeps the blur's render bounds
-   *  from bleeding into a tightly adjacent neighbor (see FOCUS_BLUR_STRENGTH). */
-  private readonly focusBlurFilter = new BlurFilter({
-    strength: FOCUS_BLUR_STRENGTH,
-    quality: 4,
-  });
-  private readonly focusDesaturateFilter = new ColorMatrixFilter();
-
-  private readonly focusFilters = [this.focusBlurFilter, this.focusDesaturateFilter];
 
   constructor(
     private readonly world: Container,
     private readonly stage: Container,
     private readonly getCamera: () => CameraSnapshot,
   ) {
-    this.focusDesaturateFilter.saturate(FOCUS_DESATURATION, false);
-
     // Drag continuation: like PointerInteraction's panning, these use the
     // "global" variants so a move/rotate keeps tracking the pointer even
     // once it moves outside the dragged shape's own bounds.
+    this.grid.eventMode = 'none';
+    this.world.addChild(this.grid);
+    this.drawGrid();
+
     this.stage.on('globalpointermove', this.onDragMove);
     this.stage.on('pointerup', this.onDragEnd);
     this.stage.on('pointerupoutside', this.onDragEnd);
@@ -202,10 +226,32 @@ export class SpaceRenderer {
     if (this.mode === mode) return;
     this.cancelDrag();
     this.mode = mode;
+
+    // Editor mode allows selecting any booth. When returning to view mode,
+    // revalidate those editor-only selections against the real selection rule.
+    if (mode === 'view') {
+      const invalidated: string[] = [];
+      for (const id of Array.from(this.selectedIds)) {
+        const space = this.spaceData.get(id);
+        if (!space || !this.isSelectable(space)) {
+          this.selectedIds.delete(id);
+          invalidated.push(id);
+        }
+      }
+
+      if (invalidated.length > 0) {
+        invalidated.forEach((id) => this.repaint(id));
+        this.events.emit('select', Array.from(this.selectedIds));
+        this.events.emit('selectioninvalidated', invalidated);
+      }
+    }
+
     this.spaceData.forEach((space, id) => this.updateCursor(id, space));
     // The rotation handle only shows for a selected space in edit mode,
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
+    this.updateFocusEffect();
+    this.updateGridVisibility();
     this.events.emit('modechange', mode);
   }
 
@@ -227,6 +273,34 @@ export class SpaceRenderer {
     return this.mode;
   }
 
+  /** Shows or hides the editor grid. The grid is never part of map data. */
+  setGridEnabled(enabled: boolean): void {
+    this.gridEnabled = enabled;
+    this.updateGridVisibility();
+  }
+
+  setGridSize(size: number): void {
+    this.gridSize = Math.max(10, Math.min(500, Math.round(size)));
+    this.drawGrid();
+  }
+
+  setTheme(theme: MapTheme): void {
+    this.theme = theme;
+    this.spaceData.forEach((space, id) => this.repaint(id));
+    this.drawGrid();
+  }
+
+  /** Keeps important map text readable as the camera zoom changes. */
+  setCameraZoom(zoom: number): void {
+    if (Math.abs(zoom - this.lastLabelZoom) < 0.01) return;
+    this.lastLabelZoom = zoom;
+
+    this.spaceNodes.forEach((entry, id) => {
+      const space = this.spaceData.get(id);
+      if (space) this.updateLabel(entry, space);
+    });
+  }
+
   setVisualFilter(filter: VisualFilter): void {
     this.visualFilter = filter;
     this.updateFocusEffect();
@@ -235,6 +309,8 @@ export class SpaceRenderer {
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
     this.statusStyles = { ...DEFAULT_STATUS_STYLES, ...styles };
+    this.spaceData.forEach((space, id) => this.repaint(id));
+    this.updateFocusEffect();
   }
 
   /** Overrides which spaces can be selected — status/business truth is the
@@ -282,10 +358,15 @@ export class SpaceRenderer {
   loadSpaces(spaces: Space[]): void {
     this.cancelDrag();
     this.world.removeChildren();
+    this.grid.removeFromParent();
+    this.grid.clear();
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
     this.hoveredId = null;
+
+    this.world.addChild(this.grid);
+    this.drawGrid();
 
     for (const space of spaces) {
       this.spaceData.set(space.id, space);
@@ -311,6 +392,7 @@ export class SpaceRenderer {
     const entry = this.createSpaceNode(space);
     this.spaceNodes.set(space.id, entry);
     this.world.addChild(entry.node);
+    this.drawGrid();
     this.updateFocusEffect(); // a newly added space should be dimmed too if a focus is active
     this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
@@ -318,7 +400,11 @@ export class SpaceRenderer {
   /** Merges `patch` into an existing space's geometry/properties and repaints/repositions it. */
   updateSpace(
     id: string,
-    patch: { geometry?: Partial<Space['geometry']>; properties?: Partial<Space['properties']> },
+    patch: {
+      type?: Space['type'];
+      geometry?: Partial<Space['geometry']>;
+      properties?: Partial<Space['properties']>;
+    },
   ): void {
     const existing = this.spaceData.get(id);
     const entry = this.spaceNodes.get(id);
@@ -329,6 +415,7 @@ export class SpaceRenderer {
 
     const merged: Space = {
       ...existing,
+      type: patch.type ?? existing.type,
       geometry: { ...existing.geometry, ...patch.geometry },
       properties: { ...existing.properties, ...patch.properties },
     };
@@ -337,11 +424,12 @@ export class SpaceRenderer {
     this.paintSpace(entry, merged);
     this.applyGeometry(entry, merged.geometry);
     this.updateCursor(id, merged);
+    this.drawGrid();
 
     // A status/data change can make a previously selected space invalid
     // (e.g. a backend update marks it sold) — the UI must never keep
     // showing a selection the business rules no longer allow.
-    if (this.selectedIds.has(id) && !this.isSelectable(merged)) {
+    if (this.mode !== 'edit' && this.selectedIds.has(id) && !this.isSelectable(merged)) {
       this.selectedIds.delete(id);
       this.repaint(id);
       this.updateFocusEffect();
@@ -366,6 +454,7 @@ export class SpaceRenderer {
     entry.node.destroy({ children: true });
     this.spaceNodes.delete(id);
     this.spaceData.delete(id);
+    this.drawGrid();
 
     if (this.hoveredId === id) {
       this.hoveredId = null;
@@ -379,20 +468,53 @@ export class SpaceRenderer {
   }
 
   /**
-   * Toggles a space's selection state. Selection is multi-select by
-   * default. Selecting (not deselecting) a space the current
-   * SelectionRule rejects is a no-op — status/business rules are the only
-   * thing allowed to gate this, and the UI must respect them exactly.
+   * Toggles a space's selection state.
+   *
+   * View mode:
+   *   - multi-select is allowed
+   *   - the real SelectionRule gates selection
+   *
+   * Edit mode:
+   *   - any booth may be selected, regardless of status
+   *   - exactly ONE booth may be selected at a time
+   *
+   * This keeps editor interactions deterministic while preserving the
+   * public/view multi-selection behaviour.
    */
   selectSpace(id: string, selected: boolean): void {
-    if (selected === this.selectedIds.has(id)) return;
-    if (selected) {
-      const space = this.spaceData.get(id);
-      if (!space || !this.isSelectable(space)) return;
-      this.selectedIds.add(id);
-    } else {
+    const alreadySelected = this.selectedIds.has(id);
+    if (selected === alreadySelected) return;
+
+    if (!selected) {
       this.selectedIds.delete(id);
+      this.repaint(id);
+      this.updateFocusEffect();
+      this.events.emit('select', Array.from(this.selectedIds));
+      return;
     }
+
+    const space = this.spaceData.get(id);
+    if (!space) return;
+
+    // Editor users can select any booth, regardless of business status.
+    if (this.mode === 'edit') {
+      const previouslySelected = Array.from(this.selectedIds).filter((selectedId) => selectedId !== id);
+      this.selectedIds.clear();
+      this.selectedIds.add(id);
+
+      // Repaint the old selection so its selection ring/badge disappears.
+      previouslySelected.forEach((selectedId) => this.repaint(selectedId));
+      this.repaint(id);
+      this.updateFocusEffect();
+      this.events.emit('select', Array.from(this.selectedIds));
+      return;
+    }
+
+    // View mode keeps the real business-selection rule and supports
+    // multiple selected booths.
+    if (!this.isSelectable(space)) return;
+
+    this.selectedIds.add(id);
     this.repaint(id);
     this.updateFocusEffect();
     this.events.emit('select', Array.from(this.selectedIds));
@@ -419,7 +541,8 @@ export class SpaceRenderer {
   sendToBack(id: string): void {
     const entry = this.spaceNodes.get(id);
     if (!entry) return;
-    this.world.setChildIndex(entry.node, 0);
+    // Grid occupies world child index 0, so never place map content beneath it.
+    this.world.setChildIndex(entry.node, this.grid.parent === this.world ? 1 : 0);
     this.syncSpaceDataOrderToWorld();
   }
 
@@ -438,33 +561,81 @@ export class SpaceRenderer {
   }
 
   /**
-   * Recedes spaces that don't match the current visual filter behind a
-   * glass pane with a little blur. Selection itself never drives this.
+   * Recedes spaces that don't match the current visual filter under a
+   * liquid-glass overlay. Selection itself never drives this.
+   *
+   * "All" means every booth remains completely crisp. An explicit status
+   * filter or "selected" filter controls which booths receive the overlay.
    */
   private updateFocusEffect(): void {
     this.spaceNodes.forEach((entry, id) => {
       const isSelected = this.selectedIds.has(id);
       const recede = this.shouldRecede(id);
 
-      if (recede) {
-        entry.node.filters = this.focusFilters;
-        entry.node.alpha = FOCUS_DIM_ALPHA;
-        entry.node.scale.set(1);
-        entry.glass.visible = true;
-      } else {
-        entry.node.filters = [];
-        entry.node.alpha = 1;
-        entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
-        entry.glass.visible = false;
-      }
+      // Keep the liquid-glass overlay crisp, while the booth's own content
+      // (including its name) recedes softly behind it.
+      this.applyContentFocus(entry, recede);
+      entry.node.alpha = 1;
+      entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
+      entry.glass.visible = recede;
     });
   }
 
   private shouldRecede(id: string): boolean {
     if (this.visualFilter.type === 'all') return false;
-    if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
+
     const space = this.spaceData.get(id);
-    return space?.properties.status !== this.visualFilter.status;
+    if (!space) return false;
+
+    // Infrastructure and props are background/context elements, so they
+    // always recede under any active filter. "All" remains fully crisp.
+    if (space.type !== 'booth') return true;
+
+    if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
+    return space.properties.status !== this.visualFilter.status;
+  }
+
+  private updateGridVisibility(): void {
+    this.grid.visible = this.gridEnabled && this.mode === 'edit';
+  }
+
+  private drawGrid(): void {
+    this.grid.clear();
+    const spaces = Array.from(this.spaceData.values());
+
+    let minX = -500;
+    let minY = -500;
+    let maxX = 2500;
+    let maxY = 1800;
+
+    if (spaces.length > 0) {
+      minX = Math.floor((Math.min(...spaces.map((s) => s.geometry.x)) - 400) / this.gridSize) * this.gridSize;
+      minY = Math.floor((Math.min(...spaces.map((s) => s.geometry.y)) - 400) / this.gridSize) * this.gridSize;
+      maxX = Math.ceil((Math.max(...spaces.map((s) => s.geometry.x + s.geometry.width)) + 400) / this.gridSize) * this.gridSize;
+      maxY = Math.ceil((Math.max(...spaces.map((s) => s.geometry.y + s.geometry.height)) + 400) / this.gridSize) * this.gridSize;
+    }
+
+    const lineColor = this.theme === 'light' ? 0x94a3b8 : 0x64748b;
+    const lineAlpha = this.theme === 'light' ? 0.24 : 0.22;
+    const majorColor = this.theme === 'light' ? 0x64748b : 0x94a3b8;
+    const majorAlpha = this.theme === 'light' ? 0.34 : 0.30;
+
+    for (let x = minX; x <= maxX; x += this.gridSize) {
+      const major = Math.round(x / this.gridSize) % 5 === 0;
+      this.grid.moveTo(x, minY);
+      this.grid.lineTo(x, maxY);
+      this.grid.stroke({ color: major ? majorColor : lineColor, width: major ? 1.15 : 0.7, alpha: major ? majorAlpha : lineAlpha });
+    }
+
+    for (let y = minY; y <= maxY; y += this.gridSize) {
+      const major = Math.round(y / this.gridSize) % 5 === 0;
+      this.grid.moveTo(minX, y);
+      this.grid.lineTo(maxX, y);
+      this.grid.stroke({ color: major ? majorColor : lineColor, width: major ? 1.15 : 0.7, alpha: major ? majorAlpha : lineAlpha });
+    }
+
+    this.grid.zIndex = -500;
+    this.updateGridVisibility();
   }
 
   destroy(): void {
@@ -473,6 +644,9 @@ export class SpaceRenderer {
     this.stage.off('pointerupoutside', this.onDragEnd);
 
     this.cancelDrag();
+    this.resizingId = null;
+    this.resizingCorner = null;
+    this.resizeStartGeometry = null;
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
@@ -482,7 +656,12 @@ export class SpaceRenderer {
 
   private createSpaceNode(space: Space): SpaceNode {
     const node = new Container();
+    // Explicit z-order prevents async image loading or the glass overlay from
+    // ever covering booth names/selection affordances.
+    node.sortableChildren = true;
+
     const shape = new Graphics();
+    shape.zIndex = 0;
     // The shape provides its own hit area from its drawn rect — the node
     // deliberately has NO explicit hitArea of its own. Setting one would
     // make Pixi treat it as the only hit region for the whole subtree,
@@ -502,14 +681,16 @@ export class SpaceRenderer {
     });
     label.eventMode = 'none';
     label.anchor.set(0.5);
+    label.zIndex = 10;
     node.addChild(label);
 
-    // The "glass pane" — a translucent cool-toned overlay shown only when
-    // this space is receded behind another one's focus. Lives above the
-    // label/image so it genuinely reads as a pane sitting over the booth.
+    // Liquid-glass overlay shown only when an active visual filter recedes
+    // this space. Its z-index is intentionally below the booth label so the
+    // booth name is never covered.
     const glass = new Graphics();
     glass.eventMode = 'none';
     glass.visible = false;
+    glass.zIndex = 5;
     node.addChild(glass);
 
     // Selected-state badge — a small check mark, visible regardless of the
@@ -518,20 +699,52 @@ export class SpaceRenderer {
     const checkBadge = new Graphics();
     checkBadge.eventMode = 'none';
     checkBadge.visible = false;
+    checkBadge.zIndex = 20;
     node.addChild(checkBadge);
 
     const handle = new Graphics();
     handle.eventMode = 'none';
+    handle.zIndex = 30;
     handle.hitArea = new Circle(0, 0, HANDLE_HIT_RADIUS);
     handle.visible = false;
     handle.cursor = 'grab';
     handle.on('pointerdown', (event) => this.onHandlePointerDown(space.id, event));
     node.addChild(handle);
 
-    const entry: SpaceNode = { node, shape, handle, label, glass, checkBadge };
+    const resizeHandles = {} as Record<ResizeCorner, Graphics>;
+    const corners: ResizeCorner[] = ['nw', 'ne', 'se', 'sw'];
+    for (const corner of corners) {
+      const resizeHandle = new Graphics();
+      resizeHandle.eventMode = 'none';
+      resizeHandle.zIndex = 40;
+      resizeHandle.hitArea = new Circle(0, 0, 9);
+      resizeHandle.visible = false;
+      resizeHandle.cursor = this.resizeCursor(corner);
+      resizeHandle.on('pointerdown', (event) =>
+        this.onResizeHandlePointerDown(space.id, corner, event),
+      );
+      resizeHandles[corner] = resizeHandle;
+      node.addChild(resizeHandle);
+    }
 
-    node.eventMode = 'static';
+    const entry: SpaceNode = {
+      node,
+      shape,
+      handle,
+      resizeHandles,
+      label,
+      glass,
+      checkBadge,
+    };
+
+    const isEditorBackground = space.id === 'ground';
+    node.eventMode = isEditorBackground ? 'none' : 'static';
+    shape.eventMode = isEditorBackground ? 'none' : 'static';
     node.label = space.id;
+    // The ground belongs behind the editor grid, while all real map
+    // elements stay above the grid. This gives the grid a useful drafting
+    // surface without turning the background into an editable target.
+    if (isEditorBackground) node.zIndex = -1000;
 
     node.on('pointerover', () => this.setHover(space.id));
     node.on('pointerout', () => this.setHover(null));
@@ -549,7 +762,50 @@ export class SpaceRenderer {
     return entry;
   }
 
-  private readonly onSpacePointerDown = (id: string, event: FederatedPointerEvent): void => {
+  private resizeCursor(corner: ResizeCorner): string {
+    return corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+  }
+
+  private drawResizeHandles(
+    handles: Record<ResizeCorner, Graphics>,
+    geometry: Space['geometry'],
+  ): void {
+    const corners: Record<ResizeCorner, { x: number; y: number }> = {
+      nw: { x: 0, y: 0 },
+      ne: { x: geometry.width, y: 0 },
+      se: { x: geometry.width, y: geometry.height },
+      sw: { x: 0, y: geometry.height },
+    };
+
+    for (const [corner, handle] of Object.entries(handles) as [
+      ResizeCorner,
+      Graphics,
+    ][]) {
+      const { x, y } = corners[corner];
+      handle.position.set(x, y);
+      handle.clear().roundRect(-5, -5, 10, 10, 2).fill({ color: 0xffffff, alpha: 0.96 });
+      handle.stroke({ color: 0x3a7afe, width: 1.25, alpha: 0.95 });
+    }
+  }
+
+  private readonly onResizeHandlePointerDown = (
+    id: string,
+    corner: ResizeCorner,
+    event: FederatedPointerEvent,
+  ): void => {
+    if (this.mode !== 'edit') return;
+
+    const space = this.spaceData.get(id);
+    if (!space) return;
+
+    event.stopPropagation();
+
+    this.resizingId = id;
+    this.resizingCorner = corner;
+    this.resizeStartGeometry = { ...space.geometry };
+  };
+
+    private readonly onSpacePointerDown = (id: string, event: FederatedPointerEvent): void => {
     if (this.mode !== 'edit') return;
 
     const space = this.spaceData.get(id);
@@ -580,6 +836,11 @@ export class SpaceRenderer {
   };
 
   private readonly onDragMove = (event: FederatedPointerEvent): void => {
+    if (this.resizingId && this.resizingCorner && this.resizeStartGeometry) {
+      this.resizeFromPointer(event, this.resizingId, this.resizingCorner, this.resizeStartGeometry);
+      return;
+    }
+
     if (this.draggingId) {
       const zoom = this.getCamera().zoom;
       const dx = (event.global.x - this.dragStartPointerX) / zoom;
@@ -606,7 +867,81 @@ export class SpaceRenderer {
     }
   };
 
+  private resizeFromPointer(
+    event: FederatedPointerEvent,
+    id: string,
+    corner: ResizeCorner,
+    start: Space['geometry'],
+  ): void {
+    const cam = this.getCamera();
+    const pointerWorldX = (event.global.x - cam.x) / cam.zoom;
+    const pointerWorldY = (event.global.y - cam.y) / cam.zoom;
+
+    const startCenterX = start.x + start.width / 2;
+    const startCenterY = start.y + start.height / 2;
+    const angle = ((start.rotation ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // Convert the pointer into the start geometry's local coordinate system.
+    const worldDx = pointerWorldX - startCenterX;
+    const worldDy = pointerWorldY - startCenterY;
+    const localX = worldDx * cos + worldDy * sin;
+    const localY = -worldDx * sin + worldDy * cos;
+
+    const sx = corner === 'ne' || corner === 'se' ? 1 : -1;
+    const sy = corner === 'se' || corner === 'sw' ? 1 : -1;
+
+    const anchorX = -sx * start.width / 2;
+    const anchorY = -sy * start.height / 2;
+    const minSize = 4;
+
+    const targetX = sx > 0
+      ? Math.max(anchorX + minSize, localX)
+      : Math.min(anchorX - minSize, localX);
+    const targetY = sy > 0
+      ? Math.max(anchorY + minSize, localY)
+      : Math.min(anchorY - minSize, localY);
+
+    let newWidth = Math.abs(targetX - anchorX);
+    let newHeight = Math.abs(targetY - anchorY);
+
+    // A circle remains a true circle while still allowing free corner sizing.
+    if (start.type === 'circle') {
+      const diameter = Math.max(newWidth, newHeight);
+      newWidth = diameter;
+      newHeight = diameter;
+    }
+
+    const newCenterLocalX = (targetX + anchorX) / 2;
+    const newCenterLocalY = (targetY + anchorY) / 2;
+
+    const newCenterWorldX =
+      startCenterX + newCenterLocalX * cos - newCenterLocalY * sin;
+    const newCenterWorldY =
+      startCenterY + newCenterLocalX * sin + newCenterLocalY * cos;
+
+    this.updateSpace(id, {
+      geometry: {
+        x: newCenterWorldX - newWidth / 2,
+        y: newCenterWorldY - newHeight / 2,
+        width: newWidth,
+        height: newHeight,
+      },
+    });
+  }
+
   private readonly onDragEnd = (): void => {
+    if (this.resizingId) {
+      const id = this.resizingId;
+      this.resizingId = null;
+      this.resizingCorner = null;
+      this.resizeStartGeometry = null;
+      const space = this.spaceData.get(id);
+      if (space) this.events.emit('spacetransform', { id, geometry: space.geometry });
+      return;
+    }
+
     if (this.draggingId) {
       const id = this.draggingId;
       this.draggingId = null;
@@ -626,6 +961,9 @@ export class SpaceRenderer {
   private cancelDrag(): void {
     this.draggingId = null;
     this.rotatingId = null;
+    this.resizingId = null;
+    this.resizingCorner = null;
+    this.resizeStartGeometry = null;
   }
 
   /** Positions/rotates a node from its geometry. */
@@ -645,53 +983,385 @@ export class SpaceRenderer {
     const style = this.applyInteractionState(space, baseStyle);
     const hasImage = typeof properties.imageUrl === 'string' && properties.imageUrl.length > 0;
 
-    entry.shape.clear().rect(0, 0, geometry.width, geometry.height);
-    // An image fill replaces the flat status color, but the status/hover/
-    // selection stroke still shows on top so state stays readable.
-    entry.shape.fill({ color: style.fill, alpha: hasImage ? 0 : (style.fillAlpha ?? 1) });
+    // Draw booths using their selected vector geometry. Infrastructure
+    // and props use a lightweight map-symbol renderer instead.
+    entry.shape.clear();
 
-    if (style.strokeWidth) {
+    if (space.type === 'prop') {
+      if (!hasImage) {
+        const isGround = space.id === 'ground';
+        this.drawPropShape(
+          entry.shape,
+          geometry,
+          isGround
+            ? (this.theme === 'dark' ? 0x20252b : 0xf3f0e8)
+            : this.parsePropColor(space.properties.propColor),
+        );
+      }
+    } else if (space.type === 'textbox') {
+      // A text box is primarily text. Keep a nearly invisible hit surface so
+      // it remains draggable/editable without introducing a heavy card around
+      // the content.
+      entry.shape.roundRect(
+        0,
+        0,
+        geometry.width,
+        geometry.height,
+        Math.min(10, Math.min(geometry.width, geometry.height) * 0.18),
+      );
+    } else {
+      switch (geometry.type) {
+        case 'circle': {
+          const radius = Math.min(geometry.width, geometry.height) / 2;
+          entry.shape.circle(geometry.width / 2, geometry.height / 2, radius);
+          break;
+        }
+        case 'ellipse':
+          entry.shape.ellipse(
+            geometry.width / 2,
+            geometry.height / 2,
+            geometry.width / 2,
+            geometry.height / 2,
+          );
+          break;
+        case 'rounded-rectangle':
+          entry.shape.roundRect(
+            0,
+            0,
+            geometry.width,
+            geometry.height,
+            Math.min(16, Math.min(geometry.width, geometry.height) * 0.18),
+          );
+          break;
+        case 'triangle':
+          entry.shape.poly([
+            geometry.width / 2, 0,
+            geometry.width, geometry.height,
+            0, geometry.height,
+          ]);
+          break;
+        case 'diamond':
+          entry.shape.poly([
+            geometry.width / 2, 0,
+            geometry.width, geometry.height / 2,
+            geometry.width / 2, geometry.height,
+            0, geometry.height / 2,
+          ]);
+          break;
+        case 'line':
+          entry.shape.roundRect(
+            0,
+            0,
+            geometry.width,
+            Math.max(2, geometry.height),
+            Math.max(1, geometry.height / 2),
+          );
+          break;
+        case 'rectangle':
+        default:
+          entry.shape.rect(0, 0, geometry.width, geometry.height);
+          break;
+      }
+    }
+
+
+    if (space.type === 'booth') {
+      // Image fills currently support rectangles only.
+      const displayColor = this.parsePropColor(properties.displayColor, style.fill);
+      const displayStroke = this.parsePropColor(properties.displayStrokeColor, style.stroke ?? style.fill);
+
+      entry.shape.fill({
+        color: displayColor,
+        alpha: hasImage && geometry.type === 'rectangle' ? 0 : (style.fillAlpha ?? 1),
+      });
+
+      if (style.strokeWidth) {
+        entry.shape.stroke({ color: displayStroke, width: style.strokeWidth });
+      }
+    } else if (space.type === 'textbox') {
+      // Textboxes have no status fill. Only draw interaction outlines.
+      entry.shape.fill({ color: 0xffffff, alpha: 0.001 });
+      if (style.strokeWidth) {
+        entry.shape.stroke({ color: style.stroke ?? HOVER_STROKE_COLOR, width: style.strokeWidth, alpha: 0.65 });
+      }
+    } else if (style.strokeWidth) {
+      // Context elements use their own symbol colors; only add the selection/
+      // hover outline from the common interaction state.
       entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
     }
 
     this.updateImage(entry, space);
     this.updateLabel(entry, space);
-    this.drawGlass(entry.glass, geometry); // size only — visibility is set by updateFocusEffect()
+    this.applyContentFocus(entry, this.shouldRecede(space.id));
+    this.drawGlass(entry.glass, geometry); // visibility is set by updateFocusEffect()
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
     this.drawHandle(entry.handle, geometry);
-    const showHandle = this.mode === 'edit' && this.selectedIds.has(space.id);
-    entry.handle.visible = showHandle;
-    entry.handle.eventMode = showHandle ? 'static' : 'none';
-    entry.node.addChild(entry.handle); // keep the handle above the label/image
+    const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
+    entry.handle.visible = showEditorHandles;
+    entry.handle.eventMode = showEditorHandles ? 'static' : 'none';
+    entry.node.addChild(entry.handle); // keep the rotation handle above the label/image
+
+    this.drawResizeHandles(entry.resizeHandles, geometry);
+    for (const resizeHandle of Object.values(entry.resizeHandles)) {
+      resizeHandle.visible = showEditorHandles;
+      resizeHandle.eventMode = showEditorHandles ? 'static' : 'none';
+      entry.node.addChild(resizeHandle);
+    }
   }
 
-  /** Shows the space's name centered on it, hidden when the box is too small to read. */
+  /** Draws simple vector symbols for infrastructure and prop elements. */
+  /** Converts the editor's hex prop color into a Pixi numeric color. */
+  private parsePropColor(value: unknown, fallback = 0x64748b): number {
+    if (typeof value !== 'string') return fallback;
+    const normalized = value.trim().replace(/^#/, '');
+    if (!/^[0-9a-fA-F]{6}$/.test(normalized)) return fallback;
+    return Number.parseInt(normalized, 16);
+  }
+
+  /** Draws the selected vector shape for a prop. */
+  private drawPropShape(shape: Graphics, geometry: Space['geometry'], color: number): void {
+    const { width, height } = geometry;
+
+    switch (geometry.type) {
+      case 'circle':
+        shape.circle(width / 2, height / 2, Math.min(width, height) / 2);
+        break;
+      case 'ellipse':
+        shape.ellipse(width / 2, height / 2, width / 2, height / 2);
+        break;
+      case 'rounded-rectangle':
+        shape.roundRect(
+          0,
+          0,
+          width,
+          height,
+          Math.min(16, Math.min(width, height) * 0.18),
+        );
+        break;
+      case 'triangle':
+        shape.poly([width / 2, 0, width, height, 0, height]);
+        break;
+      case 'diamond':
+        shape.poly([
+          width / 2, 0,
+          width, height / 2,
+          width / 2, height,
+          0, height / 2,
+        ]);
+        break;
+      case 'line':
+        shape.roundRect(
+          0,
+          0,
+          width,
+          Math.max(2, height),
+          Math.max(1, height / 2),
+        );
+        break;
+      case 'rectangle':
+      default:
+        shape.rect(0, 0, width, height);
+        break;
+    }
+
+    shape.fill({ color, alpha: 1 });
+  }
+
+  /** Shows important labels at a readable screen size with simple LOD. */
   private updateLabel(entry: SpaceNode, space: Space): void {
     const { width, height } = space.geometry;
     const name = space.properties.name;
+    const zoom = Math.max(0.05, this.getCamera().zoom);
+    const screenWidth = width * zoom;
+    const screenHeight = height * zoom;
 
-    if (!name || width < LABEL_MIN_WIDTH || height < LABEL_MIN_HEIGHT) {
+    const isBooth = space.type === 'booth';
+    const showPropText = space.type === 'prop' && space.properties.textVisible === true;
+    const showTextboxText = space.type === 'textbox';
+
+    if (!name) {
       entry.label.visible = false;
       return;
     }
 
+    // Very small labels become visual noise at overview scale.
+    const minScreenWidth = showTextboxText ? 70 : 30;
+    const minScreenHeight = showTextboxText ? 18 : 16;
+    if (screenWidth < minScreenWidth || screenHeight < minScreenHeight) {
+      entry.label.visible = false;
+      return;
+    }
+
+    if (!isBooth && !showPropText && !showTextboxText) {
+      entry.label.visible = false;
+      return;
+    }
+
+    let displayText = name;
+
+    // Keep booth names visible at the normal browsing zoom. Only fall
+    // back to the compact ID when the booth becomes genuinely too small.
+    if (isBooth && screenWidth < 54) {
+      displayText = space.id;
+    }
+
     entry.label.visible = true;
-    entry.label.text = name;
-    entry.label.style.fontSize = Math.max(9, Math.min(14, height / 4));
-    entry.label.style.wordWrapWidth = Math.max(10, width - 8);
+    entry.label.text = displayText;
+
+    const targetScreenFont = showTextboxText
+      ? (screenWidth < 130 ? 12 : 15)
+      : (screenWidth < 76 ? 10 : 11.5);
+
+    entry.label.style.fontSize = targetScreenFont / zoom;
+    const textColor = this.parsePropColor(
+      space.properties.displayTextColor,
+      showTextboxText ? 0x243039 : LABEL_COLOR,
+    );
+    const outlineColor = this.parsePropColor(
+      space.properties.displayTextOutlineColor,
+      showTextboxText ? 0xffffff : LABEL_OUTLINE_COLOR,
+    );
+    const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
+      ? 0
+      : Math.min(4, showTextboxText ? 1.8 / zoom : 2.2 / zoom);
+
+    entry.label.style.fill = textColor;
+    entry.label.style.stroke = { color: outlineColor, width: outlineWidth };
+    entry.label.style.wordWrapWidth = Math.max(
+      10,
+      width - (showTextboxText ? 12 : 6),
+    );
     entry.label.style.wordWrap = true;
     entry.label.position.set(width / 2, height / 2);
   }
 
-  /** The translucent pane shown over a receded (focus-dimmed) space. */
+  /**
+   * Applies the subtle focus blur to the booth's actual content only.
+   * The liquid-glass overlay remains crisp, while the shape, image, label,
+   * badge, and edit handle recede together when a visual filter is active.
+   */
+  private applyContentFocus(entry: SpaceNode, recede: boolean): void {
+    const filters = recede ? [this.contentBlurFilter] : [];
+
+    entry.shape.filters = filters;
+    entry.label.filters = filters;
+    entry.checkBadge.filters = filters;
+    entry.handle.filters = filters;
+
+    if (entry.image) {
+      entry.image.sprite.filters = filters;
+    }
+  }
+
+  /** Draws a liquid-glass surface matching the receded vector geometry. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
-    glass
-      .clear()
-      .rect(0, 0, geometry.width, geometry.height)
-      .fill({ color: GLASS_TINT_COLOR, alpha: GLASS_TINT_ALPHA })
-      .stroke({ color: GLASS_EDGE_COLOR, width: 1, alpha: GLASS_EDGE_ALPHA });
+    const { width, height } = geometry;
+
+    glass.clear();
+
+    if (width <= 2 || height <= 2) return;
+
+    const radius = Math.min(12, Math.max(4, Math.min(width, height) * 0.12));
+    const inset = 1.5;
+
+    const drawShape = (pad: number, inner = false): void => {
+      const w = Math.max(0, width - pad * 2);
+      const h = Math.max(0, height - pad * 2);
+
+      switch (geometry.type) {
+        case 'circle': {
+          const r = Math.min(w, h) / 2;
+          glass.circle(pad + w / 2, pad + h / 2, r);
+          break;
+        }
+        case 'ellipse':
+          glass.ellipse(pad + w / 2, pad + h / 2, w / 2, h / 2);
+          break;
+        case 'rounded-rectangle':
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            h,
+            inner ? Math.max(2, radius - 3) : radius,
+          );
+          break;
+        case 'triangle':
+          glass.poly([
+            pad + w / 2, pad,
+            pad + w, pad + h,
+            pad, pad + h,
+          ]);
+          break;
+        case 'diamond':
+          glass.poly([
+            pad + w / 2, pad,
+            pad + w, pad + h / 2,
+            pad + w / 2, pad + h,
+            pad, pad + h / 2,
+          ]);
+          break;
+        case 'line':
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            Math.max(2, h),
+            Math.max(1, h / 2),
+          );
+          break;
+        case 'rectangle':
+        default:
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            h,
+            inner ? Math.max(2, radius - 3) : radius,
+          );
+          break;
+      }
+    };
+
+    drawShape(0);
+    glass.fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA });
+
+    drawShape(inset, true);
+    glass.fill({ color: FILTER_GLASS_BODY_COLOR, alpha: FILTER_GLASS_BODY_ALPHA });
+
+    drawShape(0);
+    glass.stroke({
+      color: FILTER_GLASS_RIM_COLOR,
+      width: 1.6,
+      alpha: FILTER_GLASS_RIM_ALPHA,
+    });
+
+    drawShape(3, true);
+    glass.stroke({
+      color: FILTER_GLASS_RIM_COLOR,
+      width: 1,
+      alpha: FILTER_GLASS_INNER_RIM_ALPHA,
+    });
+
+    // Keep the specular highlight deliberately simple and uncluttered.
+    if (width > 8 && height > 8) {
+      const shineLength = Math.min(width * 0.42, 110);
+      if (geometry.type === 'circle') {
+        const r = Math.min(width, height) / 2;
+        glass.arc(width / 2, height / 2, Math.max(0, r - 2), Math.PI * 1.1, Math.PI * 1.85);
+      } else {
+        glass
+          .moveTo(radius * 0.55, 1.5)
+          .lineTo(Math.min(width - radius, radius * 0.55 + shineLength), 1.5);
+      }
+      glass.stroke({
+        color: FILTER_GLASS_RIM_COLOR,
+        width: 1.4,
+        alpha: FILTER_GLASS_SPECULAR_ALPHA,
+      });
+    }
   }
 
   /** Small corner check badge shown while selected — selection stays
@@ -701,7 +1371,7 @@ export class SpaceRenderer {
   private drawCheckBadge(badge: Graphics, geometry: Space['geometry']): void {
     const cx = geometry.width - CHECK_BADGE_MARGIN - CHECK_BADGE_RADIUS;
     const cy = CHECK_BADGE_MARGIN + CHECK_BADGE_RADIUS;
-    const fill = this.statusStyles.selected?.fill ?? DEFAULT_STATUS_STYLES.selected.fill;
+    const fill = SELECTED_COLOR;
 
     badge
       .clear()
@@ -730,7 +1400,7 @@ export class SpaceRenderer {
     const url =
       typeof space.properties.imageUrl === 'string' ? space.properties.imageUrl : undefined;
 
-    if (!url) {
+    if (space.type === 'textbox' || !url || space.geometry.type !== 'rectangle') {
       if (entry.image) {
         entry.image.sprite.destroy();
         entry.image = undefined;
@@ -759,6 +1429,7 @@ export class SpaceRenderer {
     sprite.width = space.geometry.width;
     sprite.height = space.geometry.height;
     sprite.position.set(space.geometry.width / 2, space.geometry.height / 2);
+    sprite.zIndex = 2;
     entry.node.addChild(sprite);
     entry.image = { sprite, url };
 
@@ -772,9 +1443,9 @@ export class SpaceRenderer {
       // active when they're set — reapply now the real (differently
       // sized) texture has replaced the 1x1 placeholder, or the sprite
       // renders at the wrong size.
-      const current = this.spaceData.get(entry.node.label as string);
-      const w = current?.geometry.width ?? sprite.width;
-      const h = current?.geometry.height ?? sprite.height;
+      const current = this.spaceData.get(space.id);
+      const w = current?.geometry.width ?? space.geometry.width;
+      const h = current?.geometry.height ?? space.geometry.height;
       sprite.width = w;
       sprite.height = h;
       sprite.position.set(w / 2, h / 2);
@@ -788,10 +1459,9 @@ export class SpaceRenderer {
     const isSelected = this.selectedIds.has(id);
 
     if (isSelected) {
-      const selectedStyle = this.statusStyles.selected ?? DEFAULT_STATUS_STYLES.selected;
       return {
         ...base,
-        stroke: selectedStyle.fill,
+        stroke: SELECTED_COLOR,
         strokeWidth: SELECTED_STROKE_WIDTH,
       };
     }

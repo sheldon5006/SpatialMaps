@@ -11,30 +11,56 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
-import { Space, SpaceStatus } from '../../lib/core/types';
+import {
+  Space,
+  SpaceElementType,
+  MapTheme,
+  SpaceGeometry,
+  MapStatusDefinition,
+  SpaceStatus,
+} from '../../lib/core/types';
 import { generateBenchSpaces } from './generate-bench-spaces';
 import { TEST_SPACES } from './test-spaces';
 
 const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
 
-const STATUS_OPTIONS: SpaceStatus[] = [
-  'available',
-  'reserved',
-  'booked',
-  'unavailable',
-  'maintenance',
+const DEFAULT_STATUS_DEFINITIONS: MapStatusDefinition[] = [
+  { key: 'available', label: 'Available', color: '#2ecc71' },
+  { key: 'reserved', label: 'Reserved', color: '#f1c40f' },
+  { key: 'booked', label: 'Booked', color: '#e67e22' },
+  { key: 'unavailable', label: 'Unavailable', color: '#7f8c8d' },
+  { key: 'maintenance', label: 'Maintenance', color: '#9b59b6' },
 ];
 
-/** Human-readable label + swatch color per status, for the legend and
- *  tooltip — kept here rather than invented per-use so they stay in sync. */
-const STATUS_META: Record<SpaceStatus, { label: string; color: string }> = {
-  available: { label: 'Available', color: '#2ecc71' },
-  reserved: { label: 'Reserved', color: '#f1c40f' },
-  booked: { label: 'Booked', color: '#e67e22' },
-  unavailable: { label: 'Unavailable', color: '#7f8c8d' },
-  maintenance: { label: 'Maintenance', color: '#9b59b6' },
-  selected: { label: 'Selected', color: '#3498db' },
-};
+const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string; icon: string }> = [
+  { value: 'rectangle', label: 'Rectangle', icon: '▭' },
+  { value: 'rounded-rectangle', label: 'Rounded', icon: '▢' },
+  { value: 'circle', label: 'Circle', icon: '○' },
+  { value: 'ellipse', label: 'Ellipse', icon: '⬭' },
+  { value: 'line', label: 'Path', icon: '—' },
+  { value: 'triangle', label: 'Triangle', icon: '△' },
+  { value: 'diamond', label: 'Diamond', icon: '◇' },
+];
+const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = [
+  { value: 'booth', label: 'Booth' },
+  { value: 'prop', label: 'Prop' },
+  { value: 'textbox', label: 'Text Box' },
+];
+
+const PROP_COLOR_PALETTE = [
+  { value: '#64748b', label: 'Slate' },
+  { value: '#ef4444', label: 'Red' },
+  { value: '#f97316', label: 'Orange' },
+  { value: '#eab308', label: 'Yellow' },
+  { value: '#22c55e', label: 'Green' },
+  { value: '#14b8a6', label: 'Teal' },
+  { value: '#06b6d4', label: 'Cyan' },
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#8b5cf6', label: 'Purple' },
+  { value: '#ec4899', label: 'Pink' },
+  { value: '#a16207', label: 'Earth' },
+  { value: '#f5f5f4', label: 'Light' },
+];
 
 /** Status/business truth decides what's selectable — never color, never a
  *  UI guess. Mirrors the engine's own default SelectionRule so the legend
@@ -61,13 +87,29 @@ const SIZE_PRESETS: SizePreset[] = [
 interface SpaceFormState {
   name: string;
   status: SpaceStatus;
+  elementType: SpaceElementType;
+  shape: SpaceGeometry['type'];
   width: number;
   height: number;
   imageDataUrl: string | null;
+  propColor: string;
+  propRepresentation: 'shape' | 'image';
+  textVisible: boolean;
 }
 
 function defaultFormState(): SpaceFormState {
-  return { name: '', status: 'available', width: 80, height: 60, imageDataUrl: null };
+  return {
+    name: '',
+    status: 'available',
+    elementType: 'booth',
+    shape: 'rectangle',
+    width: 80,
+    height: 60,
+    imageDataUrl: null,
+    propColor: '#64748b',
+    propRepresentation: 'shape',
+    textVisible: false,
+  };
 }
 
 /** The inspector drawer (300px) covers the right edge while it's open, and
@@ -101,15 +143,38 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <button [class.active]="mode() === 'view'" (click)="setMode('view')">View</button>
           <button [class.active]="mode() === 'edit'" (click)="setMode('edit')">Edit</button>
         </div>
-        <div class="mode-switch">
-          <button [class.active]="visualFilter() === 'all'" (click)="setVisualFilter('all')">All</button>
-          @for (status of statusOptions; track status) {
-            <button
-              [class.active]="visualFilter() === status"
-              (click)="setVisualFilter(status)"
-            >
-              {{ statusMeta[status].label }}
-            </button>
+        <div class="status-filter-control">
+          <button
+            class="filter-all-btn"
+            [class.active]="visualFilter() === 'all'"
+            (click)="setVisualFilter('all')"
+          >All</button>
+
+          @if (useStatusDropdown) {
+            <div class="toolbar-select-shell">
+              <select
+                [(ngModel)]="statusFilterSelection"
+                (ngModelChange)="setVisualFilter($event)"
+                aria-label="Filter by status"
+              >
+                <option value="">Filter by status</option>
+                @for (status of statusDefinitions; track status.key) {
+                  <option [value]="status.key">{{ status.label }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <div class="mode-switch">
+              @for (status of statusDefinitions; track status.key) {
+                <button
+                  [class.active]="visualFilter() === status.key"
+                  (click)="setVisualFilter(status.key)"
+                >
+                  <span class="status-dot" [style.background]="status.color"></span>
+                  {{ status.label }}
+                </button>
+              }
+            </div>
           }
         </div>
         <button
@@ -124,6 +189,14 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
             <span class="plus">+</span> Add space
           </button>
         }
+        @if (mode() === 'edit') {
+          <button class="icon-btn" [class.active]="gridEnabled()" (click)="toggleGrid()">
+            Grid
+          </button>
+        }
+        <button class="icon-btn" [class.active]="settingsOpen()" (click)="settingsOpen.set(!settingsOpen())">
+          Map settings
+        </button>
         <div class="toolbar-spacer"></div>
         <button class="icon-btn" (click)="devToolsOpen.set(!devToolsOpen())" title="Dev tools">
           Dev tools
@@ -132,6 +205,119 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 
       <div class="canvas-area">
         <div #host class="spatial-map-host"></div>
+
+        @if (settingsOpen()) {
+          <div class="settings-panel">
+            <div class="settings-header">
+              <strong>Map settings</strong>
+              <button class="icon-btn" (click)="settingsOpen.set(false)">Close</button>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">Canvas</span>
+              <div class="mode-switch">
+                <button [class.active]="mapTheme() === 'light'" (click)="setMapTheme('light')">Light</button>
+                <button [class.active]="mapTheme() === 'dark'" (click)="setMapTheme('dark')">Dark</button>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">View zoom</span>
+              <div class="settings-grid">
+                <label>
+                  <span>Min readable</span>
+                  <input type="number" min="0.1" max="3" step="0.05" [(ngModel)]="viewMinZoom" />
+                </label>
+                <label>
+                  <span>Base</span>
+                  <input type="number" min="0.1" max="4" step="0.05" [(ngModel)]="viewBaseZoom" />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input type="number" min="0.2" max="6" step="0.05" [(ngModel)]="viewMaxZoom" />
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button class="preset-btn" (click)="applyViewZoomSettings()">Apply limits</button>
+                <button class="preset-btn" (click)="resetViewZoom()">Reset to base</button>
+              </div>
+              <small class="settings-help">View mode will never zoom below the readable minimum.</small>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-heading">
+                <span class="settings-label">Space statuses</span>
+                <span class="settings-count">{{ statusCount }}</span>
+              </div>
+
+              <div class="status-list">
+                @for (status of statusDefinitions; track status.key) {
+                  <div class="status-row">
+                    <span class="status-dot large" [style.background]="status.color"></span>
+                    <div class="status-row-main">
+                      <strong>{{ status.label }}</strong>
+                      <small>{{ status.key }}</small>
+                    </div>
+                    <input
+                      class="status-color-input"
+                      type="color"
+                      [ngModel]="status.color"
+                      (ngModelChange)="updateStatusColor(status.key, $event)"
+                      [attr.aria-label]="'Color for ' + status.label"
+                    />
+                    <button
+                      type="button"
+                      class="status-remove-btn"
+                      [disabled]="isStatusInUse(status.key)"
+                      [title]="isStatusInUse(status.key) ? 'Status is assigned to a space' : 'Remove status'"
+                      (click)="removeStatus(status.key)"
+                    >×</button>
+                  </div>
+                }
+              </div>
+
+              <div class="status-add-row">
+                <input
+                  type="text"
+                  [(ngModel)]="newStatusLabel"
+                  placeholder="Add status, e.g. Pending"
+                  (keydown.enter)="addStatus()"
+                />
+                <input
+                  class="status-color-input"
+                  type="color"
+                  [(ngModel)]="newStatusColor"
+                  aria-label="New status color"
+                />
+                <button type="button" class="preset-btn" (click)="addStatus()">Add</button>
+              </div>
+              <small class="settings-help">
+                Status color controls booth background. All and Selected only are map controls.
+              </small>
+            </div>
+
+            @if (mode() === 'edit') {
+              <div class="settings-section">
+                <span class="settings-label">Edit grid</span>
+                <label class="toggle-option">
+                  <input type="checkbox" [(ngModel)]="gridEnabled" (ngModelChange)="setGridEnabled($event)" />
+                  <span>Show layout grid</span>
+                </label>
+                <div class="grid-size-row">
+                  <span>Grid size</span>
+                  @for (size of gridSizes; track size) {
+                    <button
+                      type="button"
+                      class="preset-btn"
+                      [class.active]="gridSize === size"
+                      (click)="setGridSize(size)"
+                    >{{ size }} px</button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
 
         <!-- Hover preview chip -->
         @if (hoverPreview(); as preview) {
@@ -150,17 +336,141 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 
         <label class="field">
           <span>Name</span>
-          <input type="text" [(ngModel)]="form.name" placeholder="e.g. Booth A101" />
+          <input
+            type="text"
+            [(ngModel)]="form.name"
+            [placeholder]="
+              form.elementType === 'booth'
+                ? 'e.g. Booth A101'
+                : form.elementType === 'textbox'
+                  ? 'e.g. GENERAL STORE'
+                  : 'e.g. Tree / Main Entrance'
+            "
+          />
         </label>
 
-        <label class="field">
-          <span>Status</span>
-          <select [(ngModel)]="form.status">
-            @for (status of statusOptions; track status) {
-              <option [value]="status">{{ status }}</option>
+        @if (mode() === 'edit') {
+          <label class="field">
+            <span>Map element</span>
+            <div class="element-picker" role="group" aria-label="Map element type">
+              @for (element of elementTypeOptions; track element.value) {
+                <button
+                  type="button"
+                  class="element-option"
+                  [class.active]="form.elementType === element.value"
+                  [attr.aria-pressed]="form.elementType === element.value"
+                  (click)="setElementType(element.value)"
+                >
+                  {{ element.label }}
+                </button>
+              }
+            </div>
+          </label>
+
+          @if (form.elementType === 'prop') {
+            <label class="field">
+              <span>Representation</span>
+              <div class="mode-switch">
+                <button
+                  type="button"
+                  [class.active]="form.propRepresentation === 'shape'"
+                  [attr.aria-pressed]="form.propRepresentation === 'shape'"
+                  (click)="setPropRepresentation('shape')"
+                >Shape</button>
+                <button
+                  type="button"
+                  [class.active]="form.propRepresentation === 'image'"
+                  [attr.aria-pressed]="form.propRepresentation === 'image'"
+                  (click)="setPropRepresentation('image')"
+                >Image</button>
+              </div>
+            </label>
+
+            <div class="field toggle-field">
+              <span>Text</span>
+              <label class="toggle-option">
+                <input type="checkbox" [(ngModel)]="form.textVisible" />
+                <span>Show prop name on map</span>
+              </label>
+            </div>
+
+            @if (form.propRepresentation === 'shape') {
+              <label class="field">
+                <span>Shape</span>
+                <div class="shape-picker" role="group" aria-label="Vector shape">
+                  @for (shape of vectorShapeOptions; track shape.value) {
+                    <button
+                      type="button"
+                      class="shape-option"
+                      [class.active]="form.shape === shape.value"
+                      [attr.aria-pressed]="form.shape === shape.value"
+                      (click)="setShape(shape.value)"
+                    >
+                      <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                      <span>{{ shape.label }}</span>
+                    </button>
+                  }
+                </div>
+              </label>
+
+              <label class="field">
+                <span>Prop color</span>
+                <div class="prop-color-palette" role="group" aria-label="Prop color">
+                  @for (color of propColorPalette; track color.value) {
+                    <button
+                      type="button"
+                      class="prop-color-swatch"
+                      [class.active]="form.propColor === color.value"
+                      [style.background]="color.value"
+                      [attr.aria-label]="color.label"
+                      [attr.aria-pressed]="form.propColor === color.value"
+                      (click)="setPropColor(color.value)"
+                    ></button>
+                  }
+                  <label class="custom-color">
+                    <span>Custom</span>
+                    <input type="color" [(ngModel)]="form.propColor" aria-label="Custom prop color" />
+                  </label>
+                </div>
+              </label>
             }
-          </select>
-        </label>
+          } @else if (form.elementType === 'booth') {
+            <label class="field">
+              <span>Vector shape</span>
+              <div class="shape-picker" role="group" aria-label="Vector shape">
+                @for (shape of vectorShapeOptions; track shape.value) {
+                  <button
+                    type="button"
+                    class="shape-option"
+                    [class.active]="form.shape === shape.value"
+                    [attr.aria-pressed]="form.shape === shape.value"
+                    (click)="setShape(shape.value)"
+                  >
+                    <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                    <span>{{ shape.label }}</span>
+                  </button>
+                }
+              </div>
+            </label>
+          } @else {
+            <p class="rotate-hint">
+              Uses the Name field as the text displayed on the map.
+            </p>
+          }
+        }
+
+        @if (form.elementType !== 'textbox') {
+          <label class="field">
+            <span>Status</span>
+            <div class="select-shell">
+              <select [(ngModel)]="form.status">
+                @for (status of statusDefinitions; track status.key) {
+                  <option [value]="status.key">{{ status.label }}</option>
+                }
+              </select>
+            </div>
+          </label>
+        }
 
         <label class="field">
           <span>Size</span>
@@ -183,20 +493,24 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           </div>
         </label>
 
-        <label class="field">
-          <span>Image</span>
-          @if (form.imageDataUrl) {
-            <div class="image-preview">
-              <img [src]="form.imageDataUrl" alt="" />
-              <button type="button" class="remove-image-btn" (click)="removeImage()">Remove</button>
-            </div>
-          } @else {
-            <input type="file" accept="image/*" (change)="onImageSelected($event)" />
-          }
-        </label>
+        @if (form.elementType === 'booth' || (form.elementType === 'prop' && form.propRepresentation === 'image')) {
+          <label class="field">
+            <span>Image</span>
+            @if (form.imageDataUrl) {
+              <div class="image-preview">
+                <img [src]="form.imageDataUrl" alt="" />
+                <button type="button" class="remove-image-btn" (click)="removeImage()">Remove</button>
+              </div>
+            } @else {
+              <input type="file" accept="image/*" (change)="onImageSelected($event)" />
+            }
+          </label>
+        }
 
         @if (editingId()) {
-          <p class="rotate-hint">Drag the handle above the shape to rotate it.</p>
+          <p class="rotate-hint">
+            Drag the handle above to rotate. Drag a corner handle to resize.
+          </p>
 
           <label class="field">
             <span>Layering</span>
@@ -395,6 +709,265 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         text-transform: capitalize;
       }
 
+      /* ---- Map settings ---------------------------------------------- */
+
+      .settings-panel {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        z-index: 20;
+        width: 310px;
+        max-height: calc(100% - 20px);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+        border-radius: 12px;
+        background: rgba(18, 20, 26, 0.96);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.30);
+      }
+
+      .status-filter-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .filter-all-btn {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: #c3c7d1;
+        padding: 6px 12px;
+        border-radius: 7px;
+      }
+
+      .filter-all-btn.active {
+        background: #3a7afe;
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        display: inline-block;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+      }
+
+      .mode-switch button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .toolbar-select-shell,
+      .select-shell {
+        position: relative;
+      }
+
+      .toolbar-select-shell::after,
+      .select-shell::after {
+        content: '⌄';
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-55%);
+        color: #aeb4bf;
+        pointer-events: none;
+        font-size: 14px;
+      }
+
+      .toolbar-select-shell select,
+      .select-shell select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        min-width: 148px;
+        padding: 7px 32px 7px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        background: #20242b;
+        color: #e8eaf0;
+        color-scheme: dark;
+        font: inherit;
+        outline: none;
+      }
+
+      .toolbar-select-shell select:focus,
+      .select-shell select:focus {
+        border-color: #3a7afe;
+        box-shadow: 0 0 0 2px rgba(58, 122, 254, 0.18);
+      }
+
+      .toolbar-select-shell select option,
+      .select-shell select option {
+        background: #20242b;
+        color: #e8eaf0;
+      }
+
+      .settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #e8eaf0;
+      }
+
+      .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .settings-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #7f8794;
+      }
+
+      .settings-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .settings-count {
+        min-width: 22px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #aeb4bf;
+        text-align: center;
+        font-size: 11px;
+      }
+
+      .status-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .status-row-main {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .status-row-main strong {
+        color: #e6e8ed;
+        font-size: 12px;
+      }
+
+      .status-row-main small {
+        color: #757d89;
+        font-size: 10px;
+      }
+
+      .status-dot.large {
+        width: 12px;
+        height: 12px;
+      }
+
+      .status-color-input {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      .status-remove-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #949ba6;
+        border-radius: 6px;
+      }
+
+      .status-remove-btn:hover:not(:disabled) {
+        background: rgba(226, 75, 74, 0.16);
+        color: #ff9a9a;
+      }
+
+      .status-remove-btn:disabled {
+        opacity: 0.25;
+        cursor: not-allowed;
+      }
+
+      .status-add-row {
+        display: grid;
+        grid-template-columns: 1fr 36px auto;
+        gap: 6px;
+      }
+
+      .status-add-row input[type='text'] {
+        min-width: 0;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: #e8eaf0;
+        padding: 7px 9px;
+        font: inherit;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .settings-grid label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: #9a9fab;
+        font-size: 11px;
+      }
+
+      .settings-grid input {
+        width: 100%;
+        box-sizing: border-box;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: #e8eaf0;
+        padding: 7px 8px;
+        font: inherit;
+      }
+
+      .settings-actions,
+      .grid-size-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .settings-help {
+        color: #6f7681;
+        line-height: 1.35;
+      }
+
       /* ---- Inspector drawer (contextual, right side) ---- */
 
       .inspector-drawer {
@@ -444,14 +1017,135 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
       }
 
       .field input[type='text'],
-      .field input[type='number'],
-      .field select {
+      .field input[type='number'] {
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 6px;
         color: #e8eaf0;
         padding: 7px 8px;
         font: inherit;
+      }
+
+      .element-picker {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .element-option {
+        min-height: 34px;
+        padding: 6px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+      }
+
+      .element-option.active {
+        background: rgba(58, 122, 254, 0.18);
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
+      .prop-color-palette {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+      }
+
+      .prop-color-swatch {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+      }
+
+      .prop-color-swatch.active {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 2px #3a7afe;
+      }
+
+      .toggle-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+        cursor: pointer;
+      }
+
+      .toggle-option input {
+        width: 16px;
+        height: 16px;
+        accent-color: #3a7afe;
+      }
+
+      .toggle-option:has(input:checked) {
+        background: rgba(58, 122, 254, 0.12);
+        border-color: rgba(58, 122, 254, 0.55);
+        color: #ffffff;
+      }
+
+      .custom-color {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 2px;
+        font-size: 11px;
+        color: #9a9fab;
+      }
+
+      .custom-color input {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      .shape-picker {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .shape-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 54px;
+        padding: 6px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .shape-option:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .shape-option.active {
+        background: rgba(58, 122, 254, 0.18);
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
+      .shape-icon {
+        font-size: 20px;
+        line-height: 1;
       }
 
       .preset-row {
@@ -643,14 +1337,38 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly lastTransform = signal<string | null>(null);
   protected readonly mode = signal<MapMode>('view');
   protected readonly visualFilter = signal<'all' | SpaceStatus | 'selected'>('all');
-  protected readonly statusMeta = STATUS_META;
+  protected statusDefinitions: MapStatusDefinition[] = DEFAULT_STATUS_DEFINITIONS.map((status) => ({ ...status }));
+  protected statusFilterSelection = '';
+  protected newStatusLabel = '';
+  protected newStatusColor = '#3b82f6';
+  protected readonly mapTheme = signal<MapTheme>('light');
+  protected readonly settingsOpen = signal(false);
+  protected readonly gridEnabled = signal(true);
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
 
   protected readonly benchSizes = BENCH_SIZES;
-  protected readonly statusOptions = STATUS_OPTIONS;
+  protected get statusOptions(): string[] {
+    return this.statusDefinitions.map((status) => status.key);
+  }
+
+  protected get statusCount(): number {
+    return this.statusDefinitions.length;
+  }
+
+  protected get useStatusDropdown(): boolean {
+    return this.statusDefinitions.length > 5;
+  }
   protected readonly sizePresets = SIZE_PRESETS;
+  protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
+  protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
+  protected readonly propColorPalette = PROP_COLOR_PALETTE;
+  protected readonly gridSizes = [25, 50, 100] as const;
+  protected viewMinZoom = 0.65;
+  protected viewBaseZoom = 0.88;
+  protected viewMaxZoom = 2.8;
+  protected gridSize = 50;
   protected form: SpaceFormState = defaultFormState();
 
   private readonly engine = new SpatialMapEngine();
@@ -665,7 +1383,19 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.zone.runOutsideAngular(async () => {
       await this.engine.init(this.hostRef.nativeElement);
+      this.engine.setTheme(this.mapTheme());
+      this.engine.setZoomLimits({ minZoom: this.viewMinZoom, maxZoom: this.viewMaxZoom });
+      this.engine.setGridEnabled(this.gridEnabled());
+      this.engine.setGridSize(this.gridSize);
+      this.applyStatusStyles();
       this.engine.loadSpaces(TEST_SPACES);
+      // Start from a complete map view instead of the engine's 60px/60px
+      // world offset. Fit is allowed to go below the interactive readable
+      // minimum so the whole venue remains visible.
+      this.engine.camera.fitBounds(undefined, { duration: 0 });
+      // The overview is a browsing start point, not a tiny architectural
+      // thumbnail. Center first, then move to the configured readable base.
+      this.engine.camera.setZoom(this.viewBaseZoom, { duration: 0 });
 
       // Hover/select/mode/transform are discrete, low-frequency events
       // (unlike pan/zoom), so re-entering the Angular zone here is right.
@@ -674,7 +1404,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
           this.hoveredId.set(id);
           const space = id ? this.engine.getSpace(id) : undefined;
           this.hoverPreview.set(
-            space ? { name: space.properties.name ?? id!, status: space.properties.status ?? '—' } : null,
+            space
+            ? {
+                name: space.properties.name ?? id!,
+                status: this.statusLabel(space.properties.status),
+              }
+            : null,
           );
         }),
       );
@@ -721,13 +1456,148 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setMode(mode: MapMode): void {
     this.engine.setMode(mode);
+
+    if (mode === 'view') {
+      this.engine.setZoomLimits({
+        minZoom: this.viewMinZoom,
+        maxZoom: this.viewMaxZoom,
+      });
+      if (this.engine.camera.getZoom() < this.viewMinZoom) {
+        this.engine.camera.setZoom(this.viewMinZoom, { duration: 250 });
+      }
+    } else {
+      // Editor gets a wider range so large maps can be laid out comfortably.
+      this.engine.setZoomLimits({ minZoom: 0.25, maxZoom: 3.5 });
+    }
+  }
+
+  protected setMapTheme(theme: MapTheme): void {
+    this.mapTheme.set(theme);
+    this.engine.setTheme(theme);
+  }
+
+  protected toggleGrid(): void {
+    this.setGridEnabled(!this.gridEnabled());
+  }
+
+  protected setGridEnabled(enabled: boolean): void {
+    this.gridEnabled.set(enabled);
+    this.engine.setGridEnabled(enabled);
+  }
+
+  protected setGridSize(size: number): void {
+    this.gridSize = size;
+    this.engine.setGridSize(size);
+  }
+
+  protected applyViewZoomSettings(): void {
+    this.viewMinZoom = Math.max(0.1, Math.min(this.viewMinZoom, this.viewMaxZoom));
+    this.viewBaseZoom = Math.max(this.viewMinZoom, Math.min(this.viewBaseZoom, this.viewMaxZoom));
+    this.viewMaxZoom = Math.max(this.viewBaseZoom, this.viewMaxZoom);
+    this.engine.setZoomLimits({
+      minZoom: this.viewMinZoom,
+      maxZoom: this.viewMaxZoom,
+    });
+
+    if (this.mode() === 'view' && this.engine.camera.getZoom() < this.viewMinZoom) {
+      this.engine.camera.setZoom(this.viewMinZoom, { duration: 250 });
+    }
+  }
+
+  protected resetViewZoom(): void {
+    this.applyViewZoomSettings();
+    this.engine.camera.setZoom(this.viewBaseZoom, { duration: 300 });
   }
 
   protected setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
     this.visualFilter.set(kind);
-    if (kind === 'all') this.engine.setVisualFilter({ type: 'all' });
-    else if (kind === 'selected') this.engine.setVisualFilter({ type: 'selected' });
-    else this.engine.setVisualFilter({ type: 'status', status: kind });
+    if (kind === 'all') {
+      this.statusFilterSelection = '';
+      this.engine.setVisualFilter({ type: 'all' });
+    } else if (kind === 'selected') {
+      this.statusFilterSelection = '';
+      this.engine.setVisualFilter({ type: 'selected' });
+    } else {
+      this.statusFilterSelection = kind;
+      this.engine.setVisualFilter({ type: 'status', status: kind });
+    }
+  }
+
+  protected statusLabel(status: string | undefined): string {
+    if (!status) return '—';
+    return this.statusDefinitions.find((item) => item.key === status)?.label ?? status;
+  }
+
+  private applyStatusStyles(): void {
+    const styles = Object.fromEntries(
+      this.statusDefinitions.map((status) => {
+        const fill = this.hexToNumber(status.color);
+        return [
+          status.key,
+          {
+            fill,
+            stroke: fill,
+            strokeWidth: 1,
+          },
+        ];
+      }),
+    );
+    this.engine.setStatusStyles(styles);
+  }
+
+  private hexToNumber(value: string): number {
+    const normalized = value.trim().replace(/^#/, '');
+    return /^[0-9a-fA-F]{6}$/.test(normalized)
+      ? Number.parseInt(normalized, 16)
+      : 0x64748b;
+  }
+
+  protected addStatus(): void {
+    const label = this.newStatusLabel.trim();
+    if (!label) return;
+
+    const baseKey = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'status';
+
+    let key = baseKey;
+    let suffix = 2;
+    while (this.statusDefinitions.some((status) => status.key === key)) {
+      key = `${baseKey}-${suffix++}`;
+    }
+
+    this.statusDefinitions = [
+      ...this.statusDefinitions,
+      { key, label, color: this.newStatusColor },
+    ];
+    this.applyStatusStyles();
+    this.newStatusLabel = '';
+    this.statusFilterSelection = '';
+  }
+
+  protected updateStatusColor(key: string, color: string): void {
+    this.statusDefinitions = this.statusDefinitions.map((status) =>
+      status.key === key ? { ...status, color } : status,
+    );
+    this.applyStatusStyles();
+  }
+
+  protected isStatusInUse(key: string): boolean {
+    return this.engine
+      .exportData()
+      .spaces.some((space) => space.type === 'booth' && space.properties.status === key);
+  }
+
+  protected removeStatus(key: string): void {
+    if (this.isStatusInUse(key)) return;
+
+    const next = this.statusDefinitions.filter((status) => status.key !== key);
+    if (next.length === 0) return;
+
+    this.statusDefinitions = next;
+    if (this.visualFilter() === key) this.setVisualFilter('all');
+    this.applyStatusStyles();
   }
 
   private syncDrawerToSelection(ids: string[]): void {
@@ -754,6 +1624,15 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
+      elementType: space.type === 'prop'
+        ? 'prop'
+        : space.type === 'textbox'
+          ? 'textbox'
+          : 'booth',
+      propColor: space.properties.propColor ?? '#64748b',
+      propRepresentation: space.properties.imageUrl ? 'image' : 'shape',
+      textVisible: space.properties.textVisible === true,
+      shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
       imageDataUrl: space.properties.imageUrl ?? null,
@@ -781,9 +1660,52 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form.height = preset.height;
   }
 
+  protected setElementType(elementType: SpaceElementType): void {
+    this.form.elementType = elementType;
+    if (elementType === 'booth' || elementType === 'textbox') {
+      this.form.propRepresentation = 'shape';
+      this.form.imageDataUrl = null;
+    }
+    if (elementType === 'textbox') {
+      this.form.shape = 'rectangle';
+    }
+  }
+
+  protected setPropRepresentation(representation: 'shape' | 'image'): void {
+    this.form.propRepresentation = representation;
+    if (representation === 'image') {
+      this.form.shape = 'rectangle';
+    } else {
+      this.form.imageDataUrl = null;
+    }
+  }
+
+  protected setPropColor(color: string): void {
+    this.form.propColor = color;
+  }
+
+  protected setShape(shape: SpaceGeometry['type']): void {
+    this.form.shape = shape;
+    if (this.form.elementType === 'prop') {
+      this.form.propRepresentation = 'shape';
+    }
+    if (shape === 'circle') {
+      const diameter = Math.max(4, Number(this.form.width) || 80);
+      this.form.width = diameter;
+      this.form.height = diameter;
+    }
+    if (shape === 'line') {
+      this.form.height = Math.max(3, Math.min(8, Number(this.form.height) || 6));
+    }
+  }
+
   protected onImageSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    if (this.form.elementType === 'prop') {
+      this.form.propRepresentation = 'image';
+      this.form.shape = 'rectangle';
+    }
     const reader = new FileReader();
     reader.onload = () => this.zone.run(() => (this.form.imageDataUrl = reader.result as string));
     reader.readAsDataURL(file);
@@ -791,6 +1713,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected removeImage(): void {
     this.form.imageDataUrl = null;
+    if (this.form.elementType === 'prop') this.form.propRepresentation = 'shape';
   }
 
   /** Places a new space just to the right of the current content's bounding
@@ -807,17 +1730,29 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, width, height, imageDataUrl } = this.form;
+    const { name, status, elementType, propColor, propRepresentation, textVisible, shape, width, height, imageDataUrl } = this.form;
+    const savedType: SpaceElementType = elementType;
+    const savedShape: SpaceGeometry['type'] = savedType === 'textbox' ? 'rectangle' : shape;
     const w = Math.max(4, Number(width) || 80);
-    const h = Math.max(4, Number(height) || 60);
+    const h = savedShape === 'circle' ? w : Math.max(4, Number(height) || 60);
 
     if (this.isAdding()) {
       const id = `space-${Date.now()}`;
+      const position = this.nextPlacement(w, h);
       const newSpace: Space = {
         id,
-        type: 'booth',
-        geometry: { type: 'rectangle', ...this.nextPlacement(w, h), width: w, height: h },
-        properties: { name: name || id, status, imageUrl: imageDataUrl ?? undefined },
+        type: savedType,
+        geometry: { type: savedShape, ...position, width: w, height: h },
+        properties: {
+          name: name || id,
+          status,
+          propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
+          textVisible: savedType === 'prop' ? textVisible : undefined,
+          imageUrl: (savedType === 'booth' && savedShape === 'rectangle') ||
+            (savedType === 'prop' && propRepresentation === 'image')
+            ? (imageDataUrl ?? undefined)
+            : undefined,
+        },
       };
       this.engine.addSpace(newSpace);
       this.isAdding.set(false);
@@ -828,8 +1763,18 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     const id = this.editingId();
     if (!id) return;
     this.engine.updateSpace(id, {
-      geometry: { width: w, height: h },
-      properties: { name: name || id, status, imageUrl: imageDataUrl ?? undefined },
+      type: savedType,
+      geometry: { type: savedShape, width: w, height: h },
+      properties: {
+        name: name || id,
+        status,
+        propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
+        textVisible: savedType === 'prop' ? textVisible : undefined,
+        imageUrl: (savedType === 'booth' && savedShape === 'rectangle') ||
+          (savedType === 'prop' && propRepresentation === 'image')
+          ? (imageDataUrl ?? undefined)
+          : undefined,
+      },
     });
     this.editingId.set(null);
     this.engine.clearSelection();

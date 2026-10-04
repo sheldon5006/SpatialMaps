@@ -5,7 +5,7 @@ export interface CameraLimits {
   maxZoom: number;
 }
 
-const DEFAULT_LIMITS: CameraLimits = { minZoom: 0.2, maxZoom: 4 };
+const DEFAULT_LIMITS: CameraLimits = { minZoom: 0.45, maxZoom: 3.5 };
 
 /**
  * Owns the world container's pan/zoom transform. Pure math + PixiJS
@@ -61,7 +61,19 @@ export class Camera {
     this.world.position.set(x, y);
   }
 
-  clampZoom(z: number): number {
+  /** Updates the active zoom bounds without replacing the Camera instance. */
+  setLimits(limits: Partial<CameraLimits>): void {
+    this.limits.minZoom = Math.max(0.05, limits.minZoom ?? this.limits.minZoom);
+    this.limits.maxZoom = Math.max(this.limits.minZoom, limits.maxZoom ?? this.limits.maxZoom);
+    this.setTransform(this.world.position.x, this.world.position.y, this.zoomValue);
+  }
+
+  getLimits(): CameraLimits {
+    return { ...this.limits };
+  }
+
+  clampZoom(z: number, allowBelowMin = false): number {
+    if (allowBelowMin) return Math.min(this.limits.maxZoom, z);
     return Math.min(this.limits.maxZoom, Math.max(this.limits.minZoom, z));
   }
 }
