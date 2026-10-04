@@ -1195,8 +1195,9 @@ export class SpaceRenderer {
 
     let displayText = name;
 
-    // At overview scale, booth IDs are much easier to scan than long names.
-    if (isBooth && screenWidth < 76) {
+    // Keep booth names visible at the normal browsing zoom. Only fall
+    // back to the compact ID when the booth becomes genuinely too small.
+    if (isBooth && screenWidth < 54) {
       displayText = space.id;
     }
 
