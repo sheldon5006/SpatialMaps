@@ -13,7 +13,7 @@ export type SpaceStatus =
   | 'selected';
 
 /** High-level role of a map element. */
-export type SpaceElementType = 'booth' | 'infrastructure' | 'prop';
+export type SpaceElementType = 'booth' | 'prop';
 
 /** Basic infrastructure/prop vocabulary for venue and market maps. */
 export type SpacePropKind =
@@ -84,7 +84,7 @@ export type SpaceGeometry =
 export interface SpaceProperties {
   name?: string;
   status?: SpaceStatus;
-  /** Specific infrastructure/prop kind when type is not a booth. */
+  /** Prop kind for a non-booth map element. Infrastructure concepts are props. */
   propKind?: SpacePropKind;
   /** Rendered as an image fill on top of the status color when set. */
   imageUrl?: string;
