@@ -459,6 +459,7 @@ export class SpaceRenderer {
 
       // Fly-to rope remains fully visible for its complete configured duration;
       // the timer removes the temporary focus state.
+      const focusIntensity = 1;
 
       this.drawPressShadow(
         entry.pressShadow,
