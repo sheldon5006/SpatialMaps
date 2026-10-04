@@ -267,14 +267,10 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
               </div>
             }
 
-            @if (searchListOpen()) {
-              @if (searchQuery()) {
-                <div class="search-summary">
-                  {{ searchResults().length }} matching {{ searchResults().length === 1 ? 'booth' : 'booths' }}
-                </div>
-              } @else {
-                <div class="search-summary">Browse all bookable spaces</div>
-              }
+            @if (searchListOpen() && searchQuery() && searchResults().length > 0) {
+              <div class="search-summary">
+                {{ searchMatches().length }} matching {{ searchMatches().length === 1 ? 'booth' : 'booths' }}
+              </div>
 
               <div class="search-table-head" aria-hidden="true">
                 <span>BOOTH</span>
@@ -299,12 +295,14 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
                       {{ statusLabel(space.properties.status) }}
                     </span>
                   </button>
-                } @empty {
-                  <div class="search-empty">
-                    <strong>No booths found</strong>
-                    <span>Try a booth ID, name or status.</span>
-                  </div>
                 }
+              </div>
+            }
+
+            @if (searchQuery() && searchResults().length === 0) {
+              <div class="search-empty">
+                <strong>No booths found</strong>
+                <span>Try a booth ID, name or status.</span>
               </div>
             }
           </aside>
@@ -857,14 +855,18 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
         position: absolute;
         top: 0;
         left: 0;
-        bottom: 0;
+        bottom: auto;
         z-index: 16;
         width: 308px;
+        max-height: calc(100% - 16px);
         display: flex;
         flex-direction: column;
         background: rgba(18, 20, 26, 0.96);
         border-right: 1px solid rgba(255, 255, 255, 0.10);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 0 0 10px 0;
         box-shadow: 14px 0 35px rgba(0, 0, 0, 0.16);
+        overflow: hidden;
       }
 
       .search-panel.collapsed {
@@ -1010,7 +1012,9 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
       }
 
       .search-results {
+        flex: 0 1 auto;
         min-height: 0;
+        max-height: 42vh;
         overflow-y: auto;
         padding: 0 8px 14px;
       }
@@ -2199,6 +2203,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
     const matches = this.searchMatches();
     const ids = matches.map((space) => space.id);
+
+    // Only reveal the result list when there are actual matches. The panel
+    // naturally grows to the height of the visible result rows.
+    this.searchListOpen.set(matches.length > 0);
 
     // Every matching booth is highlighted on every keystroke.
     this.searchHighlightedId.set(matches.length === 1 ? matches[0].id : null);
