@@ -78,8 +78,6 @@ const SELECTED_SCALE = 0.985;
 // Monochrome neumorphic locator: depth only — no hue, glow, or luminous accent.
 const SEARCH_HIGHLIGHT_SHADOW_COLOR = 0x111827;
 const SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR = 0x020617;
-const SEARCH_HIGHLIGHT_LIGHT_COLOR = 0xffffff;
-const SEARCH_HIGHLIGHT_INSET_COLOR = 0x334155;
 
 const PRESS_ANIMATION_DURATION_MS = 220;
 const HIGHLIGHT_FOCUS_FADE_MS = 320;
@@ -253,6 +251,7 @@ export class SpaceRenderer {
         const space = this.spaceData.get(id);
         if (!space || !this.isSelectable(space)) {
           this.selectedIds.delete(id);
+          this.startPressTransition(id, false);
           invalidated.push(id);
         }
       }
@@ -445,6 +444,11 @@ export class SpaceRenderer {
           ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
           : 1,
       );
+      entry.node.scale.set(
+        isSelected
+          ? 1 - (1 - SELECTED_SCALE) * animation.progress
+          : 1 - (1 - SELECTED_SCALE) * animation.progress,
+      );
       entry.searchHighlight.visible = visible;
     });
   }
@@ -491,6 +495,7 @@ export class SpaceRenderer {
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
+    this.pressAnimations.clear();
     this.hoveredId = null;
 
     this.world.addChild(this.grid);
@@ -714,7 +719,13 @@ export class SpaceRenderer {
       // (including its name) recedes softly behind it.
       this.applyContentFocus(entry, recede);
       entry.node.alpha = 1;
-      entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
+      // The selected control itself eases into the pressed scale while the
+      // cast shadow deepens. On deselection the same transition reverses.
+      const press = this.pressAnimations.get(id)?.progress ??
+        (isSelected ? 1 : 0);
+      entry.node.scale.set(isSelected
+        ? 1 - (1 - SELECTED_SCALE) * press
+        : 1 - (1 - SELECTED_SCALE) * press);
       entry.glass.visible = recede;
     });
   }
@@ -788,6 +799,7 @@ export class SpaceRenderer {
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
+    this.pressAnimations.clear();
     this.hoveredId = null;
     this.focusedId = null;
   }
