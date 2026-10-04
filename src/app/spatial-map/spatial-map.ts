@@ -234,7 +234,9 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         </label>
 
         @if (editingId()) {
-          <p class="rotate-hint">Drag the handle above the shape to rotate it.</p>
+          <p class="rotate-hint">
+            Drag the handle above to rotate. Drag a corner handle to resize.
+          </p>
 
           <label class="field">
             <span>Layering</span>
@@ -908,12 +910,15 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       const position = this.nextPlacement(w, h);
       const newSpace: Space = {
         id,
-        type: 'booth',
+        type: savedType,
         geometry: { type: shape, ...position, width: w, height: h },
         properties: {
           name: name || id,
           status,
-          imageUrl: shape === 'rectangle' ? (imageDataUrl ?? undefined) : undefined,
+          propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
+          imageUrl: savedType === 'booth' && shape === 'rectangle'
+            ? (imageDataUrl ?? undefined)
+            : undefined,
         },
       };
       this.engine.addSpace(newSpace);
@@ -925,11 +930,15 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     const id = this.editingId();
     if (!id) return;
     this.engine.updateSpace(id, {
+      type: savedType,
       geometry: { type: shape, width: w, height: h },
       properties: {
         name: name || id,
         status,
-        imageUrl: shape === 'rectangle' ? (imageDataUrl ?? undefined) : undefined,
+        propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
+        imageUrl: savedType === 'booth' && shape === 'rectangle'
+          ? (imageDataUrl ?? undefined)
+          : undefined,
       },
     });
     this.editingId.set(null);
