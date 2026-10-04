@@ -426,18 +426,25 @@ export class SpaceRenderer {
       const animation = this.pressAnimations.get(id);
       const entry = this.spaceNodes.get(id);
       const space = this.spaceData.get(id);
-      if (!animation || !entry || !space) {
-        this.pressAnimations.delete(id);
+      if (!entry || !space) {
+        if (animation) this.pressAnimations.delete(id);
         return;
       }
 
-      const frame = Math.max(0, Math.min(1, deltaMS / PRESS_ANIMATION_DURATION_MS));
-      const eased = 1 - Math.pow(1 - frame, 3);
-      animation.progress += (animation.target - animation.progress) * eased;
+      let press = animation?.progress ??
+        (activeIds.has(id) ? 1 : 0);
 
-      if (Math.abs(animation.target - animation.progress) < 0.001) {
-        animation.progress = animation.target;
-        this.pressAnimations.delete(id);
+      if (animation) {
+        const frame = Math.max(0, Math.min(1, deltaMS / PRESS_ANIMATION_DURATION_MS));
+        const eased = 1 - Math.pow(1 - frame, 3);
+        animation.progress += (animation.target - animation.progress) * eased;
+        press = animation.progress;
+
+        if (Math.abs(animation.target - animation.progress) < 0.001) {
+          animation.progress = animation.target;
+          press = animation.progress;
+          this.pressAnimations.delete(id);
+        }
       }
 
       const isSearch = this.searchHighlightedId === id;
@@ -448,7 +455,7 @@ export class SpaceRenderer {
       this.drawSearchHighlight(
         entry.searchHighlight,
         space.geometry,
-        animation.progress,
+        press,
         visible,
         DEFAULT_FOCUS_HIGHLIGHT_COLOR,
         isFocus && !isSelected && !isSearch
@@ -456,10 +463,12 @@ export class SpaceRenderer {
           : 1,
         this.highlightRopePhase,
       );
+
+      // Keep the tiny physical press only while the one-shot transition runs.
+      // Once settled, selected/search-highlighted spaces stay still while
+      // the perimeter rope continues its calm loop.
       entry.node.scale.set(
-        isSelected
-          ? 1 - (1 - SELECTED_SCALE) * animation.progress
-          : 1 - (1 - SELECTED_SCALE) * animation.progress,
+        1 - (1 - SELECTED_SCALE) * press,
       );
       entry.searchHighlight.visible = visible;
     });
