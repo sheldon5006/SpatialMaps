@@ -74,23 +74,19 @@ const FILTER_CONTENT_BLUR = 0.9;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
-const SELECTED_SCALE = 1.04;
-const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x22c55e;
-const SEARCH_HIGHLIGHT_DARK_COLOR = 0x061b10;
+const SELECTED_SCALE = 0.985;
 
-const SEARCH_HIGHLIGHT_CORE_COLOR = 0xffffff;
-const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.32;
-const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.98;
-const SEARCH_HIGHLIGHT_BLUR = 7;
+// Modern pressed-button locator palette: blue face + deep navy cast shadow.
+const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x3b82f6;
+const SEARCH_HIGHLIGHT_DARK_COLOR = 0x071426;
+const SEARCH_HIGHLIGHT_CORE_COLOR = 0xeff6ff;
+const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.30;
+const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.96;
+const SEARCH_HIGHLIGHT_BLUR = 4;
 
-const HIGHLIGHT_BREATHE_SPEED = 0.00135;
-const HIGHLIGHT_SWEEP_SPEED = 0.00055;
-const HIGHLIGHT_OUTER_MIN_ALPHA = 0.10;
-const HIGHLIGHT_OUTER_MAX_ALPHA = 0.20;
-const HIGHLIGHT_MID_MIN_ALPHA = 0.16;
-const HIGHLIGHT_MID_MAX_ALPHA = 0.30;
+const HIGHLIGHT_PRESS_SPEED = 0.00115;
 const HIGHLIGHT_FOCUS_FADE_MS = 320;
-const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x2dfd78;
+const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x3b82f6;
 
 export interface CameraSnapshot {
   x: number;
@@ -417,10 +413,10 @@ export class SpaceRenderer {
     }
 
     this.highlightPulseTime += deltaMS;
-    const breathe =
-      0.5 + 0.5 * Math.sin(this.highlightPulseTime * HIGHLIGHT_BREATHE_SPEED);
-    const sweepPhase =
-      (this.highlightPulseTime * HIGHLIGHT_SWEEP_SPEED) % 1;
+    // A slow depth oscillation makes the locator feel like a physical UI
+    // control gently settling into a pressed state — no neon pulse or scan line.
+    const press =
+      0.5 + 0.5 * Math.sin(this.highlightPulseTime * HIGHLIGHT_PRESS_SPEED);
 
     const touched = new Set<string>();
     if (this.searchHighlightedId) touched.add(this.searchHighlightedId);
@@ -446,10 +442,9 @@ export class SpaceRenderer {
       this.drawSearchHighlight(
         entry.searchHighlight,
         space.geometry,
-        breathe,
+        press,
         intensity > 0,
         isFocus ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
-        sweepPhase,
         intensity,
       );
     });
@@ -827,7 +822,7 @@ export class SpaceRenderer {
     const searchHighlight = new Graphics();
     searchHighlight.eventMode = 'none';
     searchHighlight.visible = false;
-    searchHighlight.zIndex = -2;
+    searchHighlight.zIndex = 4;
     searchHighlight.filters = [new BlurFilter({
       strength: SEARCH_HIGHLIGHT_BLUR,
       quality: 2,
@@ -1421,19 +1416,16 @@ export class SpaceRenderer {
   }
 
   /**
-   * Draws a restrained gaming-style locator:
-   * - slow breathing bloom rather than a rapid pulse
-   * - one-direction light sweep rather than a reversing animation
-   * - crisp rim around the target
-   * - soft fade-out when temporary fly-to focus expires
+   * Draws a modern pressed-control locator instead of a luminous glow.
+   * The target gets a deep navy cast shadow, a restrained blue face,
+   * and a soft inset bevel that moves a few pixels as the control settles.
    */
   private drawSearchHighlight(
     highlight: Graphics,
     geometry: Space['geometry'],
-    breathe = 0.5,
+    press = 0.5,
     active = true,
     color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
-    sweepPhase = 0,
     intensity = 1,
   ): void {
     highlight.clear();
@@ -1444,98 +1436,104 @@ export class SpaceRenderer {
     const minSide = Math.min(width, height);
     if (width <= 2 || height <= 2) return;
 
-    const glowStrength = Math.max(0, Math.min(1, intensity));
+    const strength = Math.max(0, Math.min(1, intensity));
+    const radius = Math.min(14, Math.max(6, minSide * 0.13));
 
-    // Broad atmospheric bloom.
-    const outerPad = 18 + breathe * 3;
-    const outerRadius = Math.min(22, Math.max(9, minSide * 0.16));
+    // The cast shadow sits down/right like a real raised control. As the
+    // locator presses in, the shadow shortens smoothly.
+    const shadowDepth = 10 - press * 5;
+    const shadowPad = 7 + (1 - press) * 2;
+
     highlight.roundRect(
-      -outerPad,
-      -outerPad,
-      width + outerPad * 2,
-      height + outerPad * 2,
-      outerRadius,
+      shadowDepth * 0.55 - shadowPad,
+      shadowDepth - shadowPad,
+      width + shadowPad * 2,
+      height + shadowPad * 2,
+      radius + shadowPad * 0.35,
     );
     highlight.fill({
       color: SEARCH_HIGHLIGHT_DARK_COLOR,
-      alpha: (HIGHLIGHT_OUTER_MIN_ALPHA +
-        (HIGHLIGHT_OUTER_MAX_ALPHA - HIGHLIGHT_OUTER_MIN_ALPHA) * breathe) *
-        glowStrength,
+      alpha: (0.48 + (1 - press) * 0.16) * strength,
     });
 
-    // Secondary green bloom.
-    const midPad = 10 + breathe * 2;
+    // A softer second shadow keeps the depth realistic rather than neon.
+    const softPad = 13 + (1 - press) * 3;
     highlight.roundRect(
-      -midPad,
-      -midPad,
-      width + midPad * 2,
-      height + midPad * 2,
-      Math.min(18, outerRadius),
+      shadowDepth * 0.32 - softPad,
+      shadowDepth * 0.58 - softPad,
+      width + softPad * 2,
+      height + softPad * 2,
+      radius + softPad * 0.30,
+    );
+    highlight.fill({
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: (0.16 + (1 - press) * 0.10) * strength,
+    });
+
+    // Blue surface wash: visible through the target while still allowing
+    // the booth's business/status color to remain readable.
+    highlight.roundRect(
+      0,
+      0,
+      width,
+      height,
+      radius,
     );
     highlight.fill({
       color,
-      alpha: (HIGHLIGHT_MID_MIN_ALPHA +
-        (HIGHLIGHT_MID_MAX_ALPHA - HIGHLIGHT_MID_MIN_ALPHA) * breathe) *
-        glowStrength,
+      alpha: 0.10 * strength,
     });
 
-    // Small luminous body wash, intentionally subtle so the booth status
-    // remains the dominant data color.
-    const innerPad = 4;
+    // Pressed-state inset: the face darkens toward the center as if pushed
+    // into a soft UI surface.
+    const inset = 2.5 + press * 1.5;
     highlight.roundRect(
-      -innerPad,
-      -innerPad,
-      width + innerPad * 2,
-      height + innerPad * 2,
-      Math.min(12, outerRadius),
+      inset,
+      inset,
+      Math.max(0, width - inset * 2),
+      Math.max(0, height - inset * 2),
+      Math.max(3, radius - 2),
     );
     highlight.fill({
-      color,
-      alpha: (0.07 + breathe * 0.05) * glowStrength,
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: (0.16 + press * 0.10) * strength,
     });
 
-    // Premium edge: mostly white with a slight green energy tint at the rim.
+    // Crisp blue rim and restrained top-left highlight replace the old glow.
     highlight.roundRect(
-      -2,
-      -2,
-      width + 4,
-      height + 4,
-      Math.min(12, outerRadius),
+      -1,
+      -1,
+      width + 2,
+      height + 2,
+      radius,
     );
     highlight.stroke({
-      color: 0xf1fff5,
-      alpha: (0.72 + breathe * 0.12) * glowStrength,
-      width: 2.0 + breathe * 0.45,
+      color: SEARCH_HIGHLIGHT_CORE_COLOR,
+      alpha: (0.42 + press * 0.18) * strength,
+      width: 1.2,
     });
 
-    // One-way shimmer. It travels continuously and wraps instead of
-    // oscillating, which reads as a polished scanner/light pass.
-    const sweepWidth = Math.max(24, Math.min(width * 0.34, 90));
-    const travel = width + sweepWidth * 2;
-    const sweepX = -width / 2 - sweepWidth + travel * sweepPhase;
-
-    highlight.moveTo(sweepX, -height / 2 - 2);
-    highlight.lineTo(sweepX + sweepWidth, -height / 2 - 2);
+    // The lower/right edge is slightly darker, reinforcing the pressed depth.
+    highlight.moveTo(3, height - 1.25);
+    highlight.lineTo(width - 3, height - 1.25);
+    highlight.moveTo(width - 1.25, 3);
+    highlight.lineTo(width - 1.25, height - 3);
     highlight.stroke({
-      color: 0xffffff,
-      alpha: 0.10 * glowStrength,
-      width: 1.4,
-      cap: 'round',
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: (0.54 + press * 0.10) * strength,
+      width: 1.5,
     });
 
-    // Subtle corner glints provide a premium UI feel without flashing.
-    const glint = 0.18 + breathe * 0.10;
-    const corner = Math.min(10, Math.max(5, minSide * 0.08));
-
-    highlight.moveTo(1, corner);
-    highlight.lineTo(1, 1);
-    highlight.lineTo(corner, 1);
-    highlight.stroke({ color: 0xd9ffe7, alpha: glint * glowStrength, width: 1.6 });
-
-    highlight.moveTo(width - corner, 1);
-    highlight.lineTo(width - 1, 1);
-    highlight.lineTo(width - 1, corner);
-    highlight.stroke({ color: 0xd9ffe7, alpha: glint * glowStrength, width: 1.6 });
+    // Small blue specular edge — static, calm, and much closer to modern UI
+    // elevation than a scanning/shimmer animation.
+    highlight.moveTo(2, Math.min(10, Math.max(4, height * 0.12)));
+    highlight.lineTo(2, 2);
+    highlight.lineTo(Math.min(width - 6, Math.max(7, width * 0.12)), 2);
+    highlight.stroke({
+      color: color,
+      alpha: 0.72 * strength,
+      width: 1.25,
+    });
   }
 
   /** Draws a liquid-glass surface matching the receded vector geometry. */
