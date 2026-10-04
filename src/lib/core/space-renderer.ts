@@ -75,6 +75,11 @@ const FILTER_CONTENT_BLUR = 0.9;
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
 const SELECTED_SCALE = 1.04;
+const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x38bdf8;
+const SEARCH_HIGHLIGHT_CORE_COLOR = 0xffffff;
+const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.22;
+const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.96;
+const SEARCH_HIGHLIGHT_BLUR = 8;
 
 export interface CameraSnapshot {
   x: number;
@@ -146,6 +151,8 @@ interface SpaceNode {
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
+  /** Backlit locator shown for the most recently chosen search result. */
+  searchHighlight: Graphics;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -178,6 +185,7 @@ export class SpaceRenderer {
 
   private hoveredId: string | null = null;
   private focusedId: string | null = null;
+  private searchHighlightedId: string | null = null;
   private readonly selectedIds = new Set<string>();
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
@@ -333,6 +341,19 @@ export class SpaceRenderer {
     if (previous) this.repaint(previous);
     if (id) this.repaint(id);
     this.events.emit('focus', id);
+  }
+
+  /**
+   * Marks a search result with a separate locator treatment.
+   * This is intentionally independent from selection/business state.
+   */
+  setSearchHighlight(id: string | null): void {
+    if (this.searchHighlightedId === id) return;
+    const previous = this.searchHighlightedId;
+    this.searchHighlightedId = id;
+
+    if (previous) this.repaint(previous);
+    if (id) this.repaint(id);
   }
 
   getSpaceCount(): number {
@@ -702,6 +723,16 @@ export class SpaceRenderer {
     checkBadge.zIndex = 20;
     node.addChild(checkBadge);
 
+    const searchHighlight = new Graphics();
+    searchHighlight.eventMode = 'none';
+    searchHighlight.visible = false;
+    searchHighlight.zIndex = -2;
+    searchHighlight.filters = [new BlurFilter({
+      strength: SEARCH_HIGHLIGHT_BLUR,
+      quality: 2,
+    })];
+    node.addChild(searchHighlight);
+
     const handle = new Graphics();
     handle.eventMode = 'none';
     handle.zIndex = 30;
@@ -735,6 +766,7 @@ export class SpaceRenderer {
       label,
       glass,
       checkBadge,
+      searchHighlight,
     };
 
     const isEditorBackground = space.id === 'ground';
@@ -1097,6 +1129,9 @@ export class SpaceRenderer {
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
+    this.drawSearchHighlight(entry.searchHighlight, geometry);
+    entry.searchHighlight.visible = this.searchHighlightedId === space.id;
+
     this.drawHandle(entry.handle, geometry);
     const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
     entry.handle.visible = showEditorHandles;
@@ -1249,13 +1284,45 @@ export class SpaceRenderer {
     entry.label.filters = filters;
     entry.checkBadge.filters = filters;
     entry.handle.filters = filters;
+    entry.searchHighlight.filters = [];
 
     if (entry.image) {
       entry.image.sprite.filters = filters;
     }
   }
 
+  /** Draws a soft backlight halo around a searched space. */
+  private drawSearchHighlight(
+    highlight: Graphics,
+    geometry: Space['geometry'],
+  ): void {
+    highlight.clear();
+
+    const { width, height } = geometry;
+    const pad = 7;
+    const glowWidth = width + pad * 2;
+    const glowHeight = height + pad * 2;
+    const radius = Math.min(14, Math.max(6, Math.min(glowWidth, glowHeight) * 0.12));
+
+    highlight.roundRect(-pad, -pad, glowWidth, glowHeight, radius);
+    highlight.fill({
+      color: SEARCH_HIGHLIGHT_GLOW_COLOR,
+      alpha: SEARCH_HIGHLIGHT_GLOW_ALPHA,
+    });
+
+    const corePad = 3;
+    const coreWidth = width + corePad * 2;
+    const coreHeight = height + corePad * 2;
+    highlight.roundRect(-corePad, -corePad, coreWidth, coreHeight, Math.min(10, radius));
+    highlight.stroke({
+      color: SEARCH_HIGHLIGHT_CORE_COLOR,
+      alpha: SEARCH_HIGHLIGHT_CORE_ALPHA,
+      width: 2.5,
+    });
+  }
+
   /** Draws a liquid-glass surface matching the receded vector geometry. */
+
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
 
