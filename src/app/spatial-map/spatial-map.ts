@@ -16,6 +16,7 @@ import {
   SpaceElementType,
   MapTheme,
   SpaceGeometry,
+  MapStatusDefinition,
   SpaceStatus,
 } from '../../lib/core/types';
 import { generateBenchSpaces } from './generate-bench-spaces';
@@ -23,12 +24,12 @@ import { TEST_SPACES } from './test-spaces';
 
 const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
 
-const STATUS_OPTIONS: SpaceStatus[] = [
-  'available',
-  'reserved',
-  'booked',
-  'unavailable',
-  'maintenance',
+const DEFAULT_STATUS_DEFINITIONS: MapStatusDefinition[] = [
+  { key: 'available', label: 'Available', color: '#2ecc71' },
+  { key: 'reserved', label: 'Reserved', color: '#f1c40f' },
+  { key: 'booked', label: 'Booked', color: '#e67e22' },
+  { key: 'unavailable', label: 'Unavailable', color: '#7f8c8d' },
+  { key: 'maintenance', label: 'Maintenance', color: '#9b59b6' },
 ];
 
 const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string; icon: string }> = [
@@ -60,17 +61,6 @@ const PROP_COLOR_PALETTE = [
   { value: '#a16207', label: 'Earth' },
   { value: '#f5f5f4', label: 'Light' },
 ];
-
-/** Human-readable label + swatch color per status, for the legend and
- *  tooltip — kept here rather than invented per-use so they stay in sync. */
-const STATUS_META: Record<SpaceStatus, { label: string; color: string }> = {
-  available: { label: 'Available', color: '#2ecc71' },
-  reserved: { label: 'Reserved', color: '#f1c40f' },
-  booked: { label: 'Booked', color: '#e67e22' },
-  unavailable: { label: 'Unavailable', color: '#7f8c8d' },
-  maintenance: { label: 'Maintenance', color: '#9b59b6' },
-  selected: { label: 'Selected', color: '#3498db' },
-};
 
 /** Status/business truth decides what's selectable — never color, never a
  *  UI guess. Mirrors the engine's own default SelectionRule so the legend
