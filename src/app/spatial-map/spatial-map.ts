@@ -323,23 +323,6 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
             </p>
           }
 
-              <div class="shape-picker" role="group" aria-label="Vector shape">
-                @for (shape of vectorShapeOptions; track shape.value) {
-                  <button
-                    type="button"
-                    class="shape-option"
-                    [class.active]="form.shape === shape.value"
-                    [attr.aria-pressed]="form.shape === shape.value"
-                    (click)="setShape(shape.value)"
-                  >
-                    <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
-                    <span>{{ shape.label }}</span>
-                  </button>
-                }
-              </div>
-            </label>
-          }
-        }
         
         @if (form.elementType !== 'textbox') {
           <label class="field">
