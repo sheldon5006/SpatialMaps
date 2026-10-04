@@ -72,7 +72,8 @@ export class Camera {
     return { ...this.limits };
   }
 
-  clampZoom(z: number): number {
+  clampZoom(z: number, allowBelowMin = false): number {
+    if (allowBelowMin) return Math.min(this.limits.maxZoom, z);
     return Math.min(this.limits.maxZoom, Math.max(this.limits.minZoom, z));
   }
 }
