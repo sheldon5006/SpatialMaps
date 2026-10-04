@@ -13,6 +13,7 @@ import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
+  MapTheme,
   SpaceStatus,
   StatusStyle,
   StatusStyleMap,
@@ -167,6 +168,7 @@ interface SpaceNode {
 export class SpaceRenderer {
   private readonly spaceNodes = new Map<string, SpaceNode>();
   private readonly spaceData = new Map<string, Space>();
+  private readonly grid = new Graphics();
   private readonly contentBlurFilter = new BlurFilter({
     strength: FILTER_CONTENT_BLUR,
     quality: 2,
@@ -180,6 +182,9 @@ export class SpaceRenderer {
 
   private mode: MapMode = 'view';
   private visualFilter: VisualFilter = { type: 'all' };
+  private gridEnabled = true;
+  private gridSize = 50;
+  private theme: MapTheme = 'dark';
 
   private draggingId: string | null = null;
   private dragStartPointerX = 0;
@@ -205,6 +210,10 @@ export class SpaceRenderer {
     // Drag continuation: like PointerInteraction's panning, these use the
     // "global" variants so a move/rotate keeps tracking the pointer even
     // once it moves outside the dragged shape's own bounds.
+    this.grid.eventMode = 'none';
+    this.world.addChild(this.grid);
+    this.drawGrid();
+
     this.stage.on('globalpointermove', this.onDragMove);
     this.stage.on('pointerup', this.onDragEnd);
     this.stage.on('pointerupoutside', this.onDragEnd);
@@ -240,6 +249,7 @@ export class SpaceRenderer {
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
     this.updateFocusEffect();
+    this.updateGridVisibility();
     this.events.emit('modechange', mode);
   }
 
@@ -259,6 +269,22 @@ export class SpaceRenderer {
 
   getMode(): MapMode {
     return this.mode;
+  }
+
+  /** Shows or hides the editor grid. The grid is never part of map data. */
+  setGridEnabled(enabled: boolean): void {
+    this.gridEnabled = enabled;
+    this.updateGridVisibility();
+  }
+
+  setGridSize(size: number): void {
+    this.gridSize = Math.max(10, Math.min(500, Math.round(size)));
+    this.drawGrid();
+  }
+
+  setTheme(theme: MapTheme): void {
+    this.theme = theme;
+    this.drawGrid();
   }
 
   setVisualFilter(filter: VisualFilter): void {
@@ -316,10 +342,15 @@ export class SpaceRenderer {
   loadSpaces(spaces: Space[]): void {
     this.cancelDrag();
     this.world.removeChildren();
+    this.grid.removeFromParent();
+    this.grid.clear();
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
     this.hoveredId = null;
+
+    this.world.addChild(this.grid);
+    this.drawGrid();
 
     for (const space of spaces) {
       this.spaceData.set(space.id, space);
@@ -542,6 +573,49 @@ export class SpaceRenderer {
 
     if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
     return space.properties.status !== this.visualFilter.status;
+  }
+
+  private updateGridVisibility(): void {
+    this.grid.visible = this.gridEnabled && this.mode === 'edit';
+  }
+
+  private drawGrid(): void {
+    this.grid.clear();
+    const spaces = Array.from(this.spaceData.values());
+
+    let minX = -500;
+    let minY = -500;
+    let maxX = 2500;
+    let maxY = 1800;
+
+    if (spaces.length > 0) {
+      minX = Math.floor((Math.min(...spaces.map((s) => s.geometry.x)) - 400) / this.gridSize) * this.gridSize;
+      minY = Math.floor((Math.min(...spaces.map((s) => s.geometry.y)) - 400) / this.gridSize) * this.gridSize;
+      maxX = Math.ceil((Math.max(...spaces.map((s) => s.geometry.x + s.geometry.width)) + 400) / this.gridSize) * this.gridSize;
+      maxY = Math.ceil((Math.max(...spaces.map((s) => s.geometry.y + s.geometry.height)) + 400) / this.gridSize) * this.gridSize;
+    }
+
+    const lineColor = this.theme === 'light' ? 0x94a3b8 : 0x64748b;
+    const lineAlpha = this.theme === 'light' ? 0.24 : 0.22;
+    const majorColor = this.theme === 'light' ? 0x64748b : 0x94a3b8;
+    const majorAlpha = this.theme === 'light' ? 0.34 : 0.30;
+
+    for (let x = minX; x <= maxX; x += this.gridSize) {
+      const major = Math.round(x / this.gridSize) % 5 === 0;
+      this.grid.moveTo(x, minY);
+      this.grid.lineTo(x, maxY);
+      this.grid.stroke({ color: major ? majorColor : lineColor, width: major ? 1.15 : 0.7, alpha: major ? majorAlpha : lineAlpha });
+    }
+
+    for (let y = minY; y <= maxY; y += this.gridSize) {
+      const major = Math.round(y / this.gridSize) % 5 === 0;
+      this.grid.moveTo(minX, y);
+      this.grid.lineTo(maxX, y);
+      this.grid.stroke({ color: major ? majorColor : lineColor, width: major ? 1.15 : 0.7, alpha: major ? majorAlpha : lineAlpha });
+    }
+
+    this.grid.zIndex = -1000;
+    this.updateGridVisibility();
   }
 
   destroy(): void {
