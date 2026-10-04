@@ -13,7 +13,7 @@ export type SpaceStatus =
   | 'selected';
 
 /** High-level role of a map element. */
-export type SpaceElementType = 'booth' | 'prop';
+export type SpaceElementType = 'booth' | 'prop' | 'textbox';
 
 /** Basic infrastructure/prop vocabulary for venue and market maps. */
 interface BaseGeometry {
@@ -74,6 +74,8 @@ export interface SpaceProperties {
   propColor?: string;
   /** Rendered as an image fill on top of the status color when set. */
   imageUrl?: string;
+  /** Shows the stored name as visible text on a prop when enabled. */
+  textVisible?: boolean;
   [key: string]: unknown;
 }
 
