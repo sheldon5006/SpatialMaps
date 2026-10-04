@@ -690,6 +690,31 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         box-shadow: 0 0 0 2px #3a7afe;
       }
 
+      .toggle-option {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 7px 10px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+        cursor: pointer;
+      }
+
+      .toggle-option input {
+        width: 16px;
+        height: 16px;
+        accent-color: #3a7afe;
+      }
+
+      .toggle-option:has(input:checked) {
+        background: rgba(58, 122, 254, 0.12);
+        border-color: rgba(58, 122, 254, 0.55);
+        color: #ffffff;
+      }
+
       .custom-color {
         display: inline-flex;
         align-items: center;
