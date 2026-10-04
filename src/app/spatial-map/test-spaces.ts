@@ -193,11 +193,26 @@ const prop = (
   height: number,
   color: string,
   shape: Space['geometry']['type'] = 'rectangle',
+  textVisible = false,
 ): Space => ({
   id,
   type: 'prop',
   geometry: { type: shape, x, y, width, height },
-  properties: { name, propColor: color },
+  properties: { name, propColor: color, textVisible },
+});
+
+const textbox = (
+  id: string,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): Space => ({
+  id,
+  type: 'textbox',
+  geometry: { type: 'rectangle', x, y, width, height },
+  properties: { name: text },
 });
 
 const imageProp = (
@@ -255,6 +270,10 @@ export const TEST_SPACES: Space[] = [
   imageProp('icon-car-show', 'Car Show', 182, 554, 72, 72, iconImage('car')),
   imageProp('icon-tree', 'Tree Landmark', 548, 300, 72, 72, iconImage('tree')),
   imageProp('icon-gate', 'Gate 75', 314, 930, 72, 72, iconImage('gate')),
+
+  // Examples for the new text controls:
+  prop('label-food', 'FOOD VENDORS', 62, 146, 192, 30, '#d8eff1', 'rounded-rectangle', true),
+  textbox('label-general-store', 'GENERAL STORE', 382, 144, 148, 34),
 
   // ---- Food / Hall Blue --------------------------------------------------
   ...boothGrid('blue', 'Blue', 58, 182, 3, 4, 52, 30, 7, 8, 0),
