@@ -195,6 +195,8 @@ export class SpaceRenderer {
   private readonly selectedIds = new Set<string>();
   /** One-shot press/release transitions. No looping pulse or glow animation. */
   private readonly pressAnimations = new Map<string, { progress: number; target: number }>();
+  /** Continuous phase for the thin two-color perimeter rope animation. */
+  private highlightRopePhase = 0;
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
   private mode: MapMode = 'view';
