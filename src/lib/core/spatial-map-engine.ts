@@ -142,6 +142,16 @@ export class SpatialMapEngine {
     this.renderer?.removeSpace(id);
   }
 
+  /** Edit-mode "Bring to front" — moves a space above everything else that overlaps it. */
+  bringToFront(id: string): void {
+    this.renderer?.bringToFront(id);
+  }
+
+  /** Edit-mode "Send to back" — moves a space below everything else that overlaps it. */
+  sendToBack(id: string): void {
+    this.renderer?.sendToBack(id);
+  }
+
   selectSpace(id: string, selected: boolean): void {
     this.renderer?.selectSpace(id, selected);
   }

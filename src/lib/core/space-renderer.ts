@@ -1,4 +1,13 @@
-import { Circle, Container, FederatedPointerEvent, Graphics, Sprite, Texture } from 'pixi.js';
+import {
+  BlurFilter,
+  Circle,
+  Container,
+  FederatedPointerEvent,
+  Graphics,
+  Sprite,
+  Text,
+  Texture,
+} from 'pixi.js';
 import { TypedEmitter } from './event-emitter';
 import {
   DEFAULT_STATUS_STYLES,
@@ -19,6 +28,19 @@ const HANDLE_RADIUS = 6;
 const HANDLE_HIT_RADIUS = 14;
 const HANDLE_COLOR = 0xffffff;
 const HANDLE_LINE_COLOR = 0xffffff;
+
+const LABEL_COLOR = 0xffffff;
+const LABEL_OUTLINE_COLOR = 0x000000;
+/** Below this, a box is too small for its name to read cleanly — hide it
+ *  rather than render illegible text. */
+const LABEL_MIN_WIDTH = 28;
+const LABEL_MIN_HEIGHT = 20;
+
+/** View-mode "focus" effect (selecting a space dims/blurs the rest, like
+ *  an iOS app-switcher focus) — strong enough to read as "the rest of the
+ *  map stepped back", gentle enough that dimmed spaces stay identifiable. */
+const FOCUS_BLUR_STRENGTH = 4;
+const FOCUS_DIM_ALPHA = 0.55;
 
 export interface CameraSnapshot {
   x: number;
@@ -54,6 +76,7 @@ interface SpaceNode {
   node: Container;
   shape: Graphics;
   handle: Graphics;
+  label: Text;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -96,6 +119,10 @@ export class SpaceRenderer {
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
+  /** One shared instance — applying the same filter to multiple display
+   *  objects is fine in Pixi and avoids allocating a GPU filter per space. */
+  private readonly focusBlurFilter = new BlurFilter({ strength: FOCUS_BLUR_STRENGTH });
+
   constructor(
     private readonly world: Container,
     private readonly stage: Container,
@@ -124,6 +151,8 @@ export class SpaceRenderer {
     // The rotation handle only shows for a selected space in edit mode,
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
+    // The focus-blur effect only applies in view mode — clear/apply it now.
+    this.updateFocusEffect();
     this.events.emit('modechange', mode);
   }
 
@@ -185,6 +214,7 @@ export class SpaceRenderer {
     const entry = this.createSpaceNode(space);
     this.spaceNodes.set(space.id, entry);
     this.world.addChild(entry.node);
+    this.updateFocusEffect(); // a newly added space should be dimmed too if a focus is active
   }
 
   /** Merges `patch` into an existing space's geometry/properties and repaints/repositions it. */
@@ -242,6 +272,7 @@ export class SpaceRenderer {
       this.selectedIds.delete(id);
     }
     this.repaint(id);
+    this.updateFocusEffect();
     this.events.emit('select', Array.from(this.selectedIds));
   }
 
@@ -250,7 +281,54 @@ export class SpaceRenderer {
     const previouslySelected = Array.from(this.selectedIds);
     this.selectedIds.clear();
     previouslySelected.forEach((id) => this.repaint(id));
+    this.updateFocusEffect();
     this.events.emit('select', []);
+  }
+
+  /** Moves a space to render above everything else (edit mode: "Bring to front"). */
+  bringToFront(id: string): void {
+    const entry = this.spaceNodes.get(id);
+    if (!entry) return;
+    this.world.setChildIndex(entry.node, this.world.children.length - 1);
+    this.syncSpaceDataOrderToWorld();
+  }
+
+  /** Moves a space to render below everything else (edit mode: "Send to back"). */
+  sendToBack(id: string): void {
+    const entry = this.spaceNodes.get(id);
+    if (!entry) return;
+    this.world.setChildIndex(entry.node, 0);
+    this.syncSpaceDataOrderToWorld();
+  }
+
+  /** Keeps spaceData's iteration order matching the actual render order, so
+   *  exportData()/getSpaces() reflect a bringToFront/sendToBack the same way
+   *  a reload of that data would reproduce visually. */
+  private syncSpaceDataOrderToWorld(): void {
+    const reordered = new Map<string, Space>();
+    for (const child of this.world.children) {
+      const id = child.label;
+      const space = id ? this.spaceData.get(id) : undefined;
+      if (space) reordered.set(id!, space);
+    }
+    this.spaceData.clear();
+    reordered.forEach((space, id) => this.spaceData.set(id, space));
+  }
+
+  /** View mode + an active selection dims/blurs everything else — an iOS-style
+   *  focus effect. Edit mode never applies it (you need full clarity while editing). */
+  private updateFocusEffect(): void {
+    const focusing = this.mode === 'view' && this.selectedIds.size > 0;
+    this.spaceNodes.forEach((entry, id) => {
+      const isSelected = this.selectedIds.has(id);
+      if (focusing && !isSelected) {
+        entry.node.filters = [this.focusBlurFilter];
+        entry.node.alpha = FOCUS_DIM_ALPHA;
+      } else {
+        entry.node.filters = [];
+        entry.node.alpha = 1;
+      }
+    });
   }
 
   destroy(): void {
@@ -276,6 +354,19 @@ export class SpaceRenderer {
     shape.eventMode = 'static';
     node.addChild(shape);
 
+    const label = new Text({
+      text: '',
+      style: {
+        fontSize: 12,
+        fill: LABEL_COLOR,
+        stroke: { color: LABEL_OUTLINE_COLOR, width: 3 },
+        align: 'center',
+      },
+    });
+    label.eventMode = 'none';
+    label.anchor.set(0.5);
+    node.addChild(label);
+
     const handle = new Graphics();
     handle.eventMode = 'none';
     handle.hitArea = new Circle(0, 0, HANDLE_HIT_RADIUS);
@@ -284,7 +375,7 @@ export class SpaceRenderer {
     handle.on('pointerdown', (event) => this.onHandlePointerDown(space.id, event));
     node.addChild(handle);
 
-    const entry: SpaceNode = { node, shape, handle };
+    const entry: SpaceNode = { node, shape, handle, label };
 
     node.eventMode = 'static';
     const cursor = this.mode === 'edit' ? 'move' : 'pointer';
@@ -409,12 +500,31 @@ export class SpaceRenderer {
     }
 
     this.updateImage(entry, space);
+    this.updateLabel(entry, space);
 
     this.drawHandle(entry.handle, geometry);
     const showHandle = this.mode === 'edit' && this.selectedIds.has(space.id);
     entry.handle.visible = showHandle;
     entry.handle.eventMode = showHandle ? 'static' : 'none';
-    entry.node.addChild(entry.handle); // keep the handle above the image sprite
+    entry.node.addChild(entry.handle); // keep the handle above the label/image
+  }
+
+  /** Shows the space's name centered on it, hidden when the box is too small to read. */
+  private updateLabel(entry: SpaceNode, space: Space): void {
+    const { width, height } = space.geometry;
+    const name = space.properties.name;
+
+    if (!name || width < LABEL_MIN_WIDTH || height < LABEL_MIN_HEIGHT) {
+      entry.label.visible = false;
+      return;
+    }
+
+    entry.label.visible = true;
+    entry.label.text = name;
+    entry.label.style.fontSize = Math.max(9, Math.min(14, height / 4));
+    entry.label.style.wordWrapWidth = Math.max(10, width - 8);
+    entry.label.style.wordWrap = true;
+    entry.label.position.set(width / 2, height / 2);
   }
 
   private drawHandle(handle: Graphics, geometry: Space['geometry']): void {

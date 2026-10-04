@@ -49,6 +49,11 @@ function defaultFormState(): SpaceFormState {
   return { name: '', status: 'available', width: 80, height: 60, imageDataUrl: null };
 }
 
+/** The inspector drawer (300px) covers the right edge while it's open, and
+ *  the toolbar no longer overlaps the canvas at all (it's a real header
+ *  now) — so only the drawer needs accounting for here. */
+const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
+
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
  * it does NOT touch rendering internals. All canvas work happens inside
@@ -153,6 +158,14 @@ function defaultFormState(): SpaceFormState {
 
         @if (editingId()) {
           <p class="rotate-hint">Drag the handle above the shape to rotate it.</p>
+
+          <label class="field">
+            <span>Layering</span>
+            <div class="preset-row">
+              <button type="button" class="preset-btn" (click)="bringToFront()">Bring to front</button>
+              <button type="button" class="preset-btn" (click)="sendToBack()">Send to back</button>
+            </div>
+          </label>
         }
 
         <div class="inspector-actions">
@@ -690,6 +703,14 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       height: space.geometry.height,
       imageDataUrl: space.properties.imageUrl ?? null,
     };
+    // The drawer is about to cover the right edge of the canvas — nudge the
+    // camera so the selected space lands in the clear area next to it,
+    // instead of sliding underneath where it'd be hidden.
+    this.engine.camera.fitBounds([id], {
+      padding: EDIT_DRAWER_PADDING,
+      maxZoom: 1.6,
+      duration: 300,
+    });
   }
 
   protected closeForm(): void {
@@ -765,6 +786,16 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     if (!id) return;
     this.engine.removeSpace(id);
     this.editingId.set(null);
+  }
+
+  protected bringToFront(): void {
+    const id = this.editingId();
+    if (id) this.engine.bringToFront(id);
+  }
+
+  protected sendToBack(): void {
+    const id = this.editingId();
+    if (id) this.engine.sendToBack(id);
   }
 
   // ---- Dev tools: camera ----

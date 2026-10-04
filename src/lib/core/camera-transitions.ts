@@ -5,13 +5,27 @@ import { Space } from './types';
 
 const DEFAULT_TRANSITION_DURATION_MS = 500;
 const FIT_BOUNDS_PADDING_PX = 80;
-const FLY_TO_PADDING_PX = 160;
+const FLY_TO_PADDING_PX = 120;
+/** flyTo deliberately doesn't zoom in past this, even for a tiny space —
+ *  "light" focus, not a tight crop you have to zoom back out of. */
+const FLY_TO_MAX_ZOOM = 1.4;
+
+export interface EdgePadding {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+}
 
 export interface TransitionOptions {
   /** Transition length in ms. Defaults to 500. */
   duration?: number;
-  /** Screen-space padding (px) kept clear around fitted content. */
-  padding?: number;
+  /** Screen-space padding kept clear around fitted content. A number applies
+   *  uniformly; an object lets one side (e.g. a drawer covering the right
+   *  edge) reserve more space than the others. */
+  padding?: number | EdgePadding;
+  /** Caps how far in the transition is allowed to zoom. */
+  maxZoom?: number;
 }
 
 interface Transition {
@@ -31,6 +45,17 @@ function easeOutCubic(t: number): number {
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
+}
+
+function resolvePadding(padding: number | EdgePadding | undefined, fallback: number): Required<EdgePadding> {
+  if (padding === undefined) return { top: fallback, right: fallback, bottom: fallback, left: fallback };
+  if (typeof padding === 'number') return { top: padding, right: padding, bottom: padding, left: padding };
+  return {
+    top: padding.top ?? fallback,
+    right: padding.right ?? fallback,
+    bottom: padding.bottom ?? fallback,
+    left: padding.left ?? fallback,
+  };
 }
 
 /**
@@ -82,32 +107,39 @@ export class CameraTransitions {
     const bounds = unionBounds(spaces);
     if (!bounds) return;
 
-    const padding = options?.padding ?? FIT_BOUNDS_PADDING_PX;
+    const pad = resolvePadding(options?.padding, FIT_BOUNDS_PADDING_PX);
     const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
     const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
-    const availableWidth = Math.max(1, this.app.screen.width - padding * 2);
-    const availableHeight = Math.max(1, this.app.screen.height - padding * 2);
+    const availableWidth = Math.max(1, this.app.screen.width - pad.left - pad.right);
+    const availableHeight = Math.max(1, this.app.screen.height - pad.top - pad.bottom);
 
-    const targetZoom = this.camera.clampZoom(
-      Math.min(availableWidth / contentWidth, availableHeight / contentHeight),
-    );
+    let targetZoom = Math.min(availableWidth / contentWidth, availableHeight / contentHeight);
+    if (options?.maxZoom !== undefined) targetZoom = Math.min(targetZoom, options.maxZoom);
+    targetZoom = this.camera.clampZoom(targetZoom);
 
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const screenCenterX = this.app.screen.width / 2;
-    const screenCenterY = this.app.screen.height / 2;
+    const contentCenterX = (bounds.minX + bounds.maxX) / 2;
+    const contentCenterY = (bounds.minY + bounds.maxY) / 2;
+    // Center within the space actually left visible after padding, not the
+    // full screen — this is what keeps a space from landing behind a
+    // right-side drawer or a top toolbar instead of in the clear area.
+    const visibleCenterX = pad.left + (this.app.screen.width - pad.left - pad.right) / 2;
+    const visibleCenterY = pad.top + (this.app.screen.height - pad.top - pad.bottom) / 2;
 
     this.animateTo(
-      screenCenterX - centerX * targetZoom,
-      screenCenterY - centerY * targetZoom,
+      visibleCenterX - contentCenterX * targetZoom,
+      visibleCenterY - contentCenterY * targetZoom,
       targetZoom,
       options?.duration ?? DEFAULT_TRANSITION_DURATION_MS,
     );
   }
 
-  /** Flies to a single space. Like fitBounds, but with generous padding so one small space doesn't zoom in absurdly tight. */
+  /** Flies to a single space. A light focus move — generous padding, capped zoom — not a tight crop you have to zoom back out of. */
   flyTo(id: string, options?: TransitionOptions): void {
-    this.fitBounds([id], { padding: FLY_TO_PADDING_PX, ...options });
+    this.fitBounds([id], {
+      padding: FLY_TO_PADDING_PX,
+      maxZoom: FLY_TO_MAX_ZOOM,
+      ...options,
+    });
   }
 
   /** Animates zoom only, keeping the point currently under screen-center fixed. */
