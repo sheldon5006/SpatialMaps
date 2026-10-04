@@ -17,6 +17,12 @@ export interface SpatialMapSettings {
   grid: SpatialMapGridSettings;
 }
 
+export type SpatialMapSettingsPatch = {
+  theme?: MapTheme;
+  zoom?: Partial<SpatialMapZoomSettings>;
+  grid?: Partial<SpatialMapGridSettings>;
+};
+
 export const DEFAULT_SPATIAL_MAP_SETTINGS: SpatialMapSettings = {
   theme: 'light',
   zoom: {
