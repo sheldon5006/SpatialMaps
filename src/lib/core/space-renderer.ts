@@ -153,8 +153,10 @@ interface SpaceNode {
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
-  /** Backlit locator shown for the most recently chosen search result. */
+  /** Moving perimeter rope shown for selected/search/focused spaces. */
   searchHighlight: Graphics;
+  /** Separate physical cast shadow so it never tints/dims the booth itself. */
+  pressShadow: Graphics;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -454,25 +456,33 @@ export class SpaceRenderer {
       const isSelected = this.selectedIds.has(id);
       const visible = isSelected || isSearch || isFocus;
 
-      this.drawSearchHighlight(
-        entry.searchHighlight,
+      const focusIntensity = isFocus && !isSelected && !isSearch
+        ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
+        : 1;
+
+      this.drawPressShadow(
+        entry.pressShadow,
         space.geometry,
         press,
         visible,
-        DEFAULT_FOCUS_HIGHLIGHT_COLOR,
-        isFocus && !isSelected && !isSearch
-          ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
-          : 1,
+        focusIntensity,
+      );
+      this.drawPerimeterRope(
+        entry.searchHighlight,
+        space.geometry,
+        visible,
+        focusIntensity,
         this.highlightRopePhase,
       );
 
       // Keep the tiny physical press only while the one-shot transition runs.
       // Once settled, selected/search-highlighted spaces stay still while
       // the perimeter rope continues its calm loop.
-      entry.node.scale.set(
+        entry.node.scale.set(
         1 - (1 - SELECTED_SCALE) * press,
       );
       entry.searchHighlight.visible = visible;
+      entry.pressShadow.visible = visible;
     });
   }
 
@@ -877,11 +887,19 @@ export class SpaceRenderer {
     checkBadge.zIndex = 20;
     node.addChild(checkBadge);
 
+    const pressShadow = new Graphics();
+    pressShadow.eventMode = 'none';
+    pressShadow.visible = false;
+    // The shadow is genuinely behind the booth fill, so it cannot darken the
+    // booth's actual status color.
+    pressShadow.zIndex = -2;
+    node.addChild(pressShadow);
+
     const searchHighlight = new Graphics();
     searchHighlight.eventMode = 'none';
     searchHighlight.visible = false;
+    // The rope sits above the booth edge, but below labels and badges.
     searchHighlight.zIndex = 4;
-    // Intentionally crisp: the locator uses layered shadow planes, not blur/glow.
     node.addChild(searchHighlight);
 
     const handle = new Graphics();
@@ -918,6 +936,7 @@ export class SpaceRenderer {
       glass,
       checkBadge,
       searchHighlight,
+      pressShadow,
     };
 
     const isEditorBackground = space.id === 'ground';
@@ -1284,17 +1303,26 @@ export class SpaceRenderer {
     const isFocusHighlighted = this.focusHighlightedId === space.id &&
       performance.now() < this.focusHighlightUntil;
     const isSelected = this.selectedIds.has(space.id);
-    this.drawSearchHighlight(
+    const initiallyVisible = isSelected || isSearchHighlighted || isFocusHighlighted;
+    const initialPress = this.pressAnimations.get(space.id)?.progress ??
+      (initiallyVisible ? 1 : 0);
+
+    this.drawPressShadow(
+      entry.pressShadow,
+      geometry,
+      initialPress,
+      initiallyVisible,
+      1,
+    );
+    this.drawPerimeterRope(
       entry.searchHighlight,
       geometry,
-      this.pressAnimations.get(space.id)?.progress ??
-        (isSelected || isSearchHighlighted || isFocusHighlighted ? 1 : 0),
-      isSelected || isSearchHighlighted || isFocusHighlighted,
-      isFocusHighlighted ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+      initiallyVisible,
       1,
       this.highlightRopePhase,
     );
-    entry.searchHighlight.visible = isSelected || isSearchHighlighted || isFocusHighlighted;
+    entry.searchHighlight.visible = initiallyVisible;
+    entry.pressShadow.visible = initiallyVisible;
 
     this.drawHandle(entry.handle, geometry);
     const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
@@ -1471,22 +1499,15 @@ export class SpaceRenderer {
     }
   }
 
-  /**
-   * Draws a subtle neumorphic press shadow plus a slim two-color marching rope.
-   *
-   * The shadow remains neutral. Tiny italic neon-blue/grey strokes circulate
-   * around the actual space perimeter. There is no glow or bloom.
-   */
-  private drawSearchHighlight(
-    highlight: Graphics,
+  /** Draws only the small neutral cast shadow behind the pressed space. */
+  private drawPressShadow(
+    shadow: Graphics,
     geometry: Space['geometry'],
     press = 1,
     active = true,
-    _color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
     intensity = 1,
-    ropePhase = 0,
   ): void {
-    highlight.clear();
+    shadow.clear();
 
     if (!active || intensity <= 0) return;
 
@@ -1497,38 +1518,68 @@ export class SpaceRenderer {
     const strength = Math.max(0, Math.min(1, intensity));
     const radius = Math.min(14, Math.max(5, minSide * 0.12));
 
-    // Small physical press shadow behind the booth.
-    const depth = 1.4 + press * 2.5;
-    const spread = 0.8 + press * 1.4;
-    highlight.roundRect(
-      depth * 0.5 - spread,
+    // Very small, soft cast shadow. It lives behind the booth in z-order,
+    // so its pixels can never darken the booth itself.
+    const depth = 1.2 + press * 2.2;
+    const spread = 0.8 + press * 1.2;
+
+    shadow.roundRect(
+      depth * 0.45 - spread,
       depth - spread,
       width + spread * 2,
       height + spread * 2,
-      radius + spread * 0.35,
+      radius + spread * 0.3,
     );
-    highlight.fill({
+    shadow.fill({
       color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
-      alpha: (0.15 + press * 0.14) * strength,
+      alpha: (0.14 + press * 0.12) * strength,
     });
 
-    const soft = 2.5 + press * 1.5;
-    highlight.roundRect(
-      depth * 0.35 - soft,
-      depth * 0.72 - soft,
+    const soft = 2.2 + press * 1.2;
+    shadow.roundRect(
+      depth * 0.30 - soft,
+      depth * 0.65 - soft,
       width + soft * 2,
       height + soft * 2,
       radius + soft * 0.25,
     );
-    highlight.fill({
+    shadow.fill({
       color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
-      alpha: (0.045 + press * 0.055) * strength,
+      alpha: (0.035 + press * 0.045) * strength,
     });
+  }
 
-    // Build a perimeter polyline around the local space shape.
+  /**
+   * Draws only the animated perimeter rope.
+   * There is deliberately no fill, tint, highlight wash, or border.
+   */
+  private drawPerimeterRope(
+    rope: Graphics,
+    geometry: Space['geometry'],
+    active = true,
+    intensity = 1,
+    ropePhase = 0,
+  ): void {
+    rope.clear();
+
+    if (!active || intensity <= 0) return;
+
+    const { width, height } = geometry;
+    const minSide = Math.min(width, height);
+    if (width <= 2 || height <= 2) return;
+
+    const strength = Math.max(0, Math.min(1, intensity));
+    const radius = Math.min(14, Math.max(5, minSide * 0.12));
+
     const inset = 1.2;
     const points: Array<{ x: number; y: number }> = [];
-    const addLine = (ax: number, ay: number, bx: number, by: number, steps: number): void => {
+    const addLine = (
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+      steps: number,
+    ): void => {
       for (let i = 0; i <= steps; i += 1) {
         const t = i / steps;
         points.push({
@@ -1624,10 +1675,6 @@ export class SpaceRenderer {
 
     if (loop.length < 2 || perimeter <= 0) return;
 
-    // No static border/overlay is added. The booth keeps its original color;
-    // only the moving rope and the separate cast shadow are visible.
-    // Tiny italic strokes march around the loop. Two colors alternate to make
-    // the movement easy to perceive without creating a luminous halo.
     const dashLength = Math.max(4, Math.min(6, minSide * 0.07));
     const gap = Math.max(3, dashLength * 0.8);
     const pitch = dashLength + gap;
@@ -1661,9 +1708,9 @@ export class SpaceRenderer {
       const dx = Math.cos(angle) * half;
       const dy = Math.sin(angle) * half;
 
-      highlight.moveTo(cx - dx, cy - dy);
-      highlight.lineTo(cx + dx, cy + dy);
-      highlight.stroke({
+      rope.moveTo(cx - dx, cy - dy);
+      rope.lineTo(cx + dx, cy + dy);
+      rope.stroke({
         color: index % 2 === 0 ? 0x00efff : 0xe5e7eb,
         alpha: 0.98 * strength,
         width: 1.7,
@@ -1875,13 +1922,9 @@ export class SpaceRenderer {
     const id = space.id;
     const isSelected = this.selectedIds.has(id);
 
-    if (isSelected) {
-      return {
-        ...base,
-        stroke: SELECTED_COLOR,
-        strokeWidth: SELECTED_STROKE_WIDTH,
-      };
-    }
+    // Selection is represented by the animated perimeter rope/check badge.
+    // Do not alter the booth's own status stroke or fill color.
+    if (isSelected) return base;
 
     // In edit mode every space is a legitimate drag/select target, so hover
     // always shows feedback there. In view mode, a space the SelectionRule
