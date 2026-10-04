@@ -895,6 +895,17 @@ export class SpaceRenderer {
           this.parsePropColor(space.properties.propColor),
         );
       }
+    } else if (space.type === 'textbox') {
+      // A text box is primarily text. Keep a nearly invisible hit surface so
+      // it remains draggable/editable without introducing a heavy card around
+      // the content.
+      entry.shape.roundRect(
+        0,
+        0,
+        geometry.width,
+        geometry.height,
+        Math.min(10, Math.min(geometry.width, geometry.height) * 0.18),
+      );
     } else {
       switch (geometry.type) {
         case 'circle': {
@@ -960,6 +971,12 @@ export class SpaceRenderer {
 
       if (style.strokeWidth) {
         entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
+      }
+    } else if (space.type === 'textbox') {
+      // Textboxes have no status fill. Only draw interaction outlines.
+      entry.shape.fill({ color: 0xffffff, alpha: 0.001 });
+      if (style.strokeWidth) {
+        entry.shape.stroke({ color: style.stroke ?? HOVER_STROKE_COLOR, width: style.strokeWidth, alpha: 0.65 });
       }
     } else if (style.strokeWidth) {
       // Context elements use their own symbol colors; only add the selection/
@@ -1051,17 +1068,29 @@ export class SpaceRenderer {
     const { width, height } = space.geometry;
     const name = space.properties.name;
 
-    // Props are map context/symbols and intentionally have no booth-style
-    // labels. Their identity is their stored name and visual shape.
-    if (space.type !== 'booth' || !name || width < LABEL_MIN_WIDTH || height < LABEL_MIN_HEIGHT) {
+    const showPropText = space.type === 'prop' && space.properties.textVisible === true;
+    const showTextboxText = space.type === 'textbox';
+
+    if (
+      (!showPropText && !showTextboxText && space.type !== 'booth') ||
+      !name ||
+      width < LABEL_MIN_WIDTH ||
+      height < LABEL_MIN_HEIGHT
+    ) {
       entry.label.visible = false;
       return;
     }
 
     entry.label.visible = true;
     entry.label.text = name;
-    entry.label.style.fontSize = Math.max(9, Math.min(14, height / 4));
-    entry.label.style.wordWrapWidth = Math.max(10, width - 8);
+    entry.label.style.fontSize = showTextboxText
+      ? Math.max(10, Math.min(22, height * 0.42))
+      : Math.max(9, Math.min(14, height / 4));
+    entry.label.style.fill = showTextboxText ? 0x1f2937 : LABEL_COLOR;
+    entry.label.style.stroke = showTextboxText
+      ? { color: 0xffffff, width: 2 }
+      : { color: LABEL_OUTLINE_COLOR, width: 3 };
+    entry.label.style.wordWrapWidth = Math.max(10, width - (showTextboxText ? 14 : 8));
     entry.label.style.wordWrap = true;
     entry.label.position.set(width / 2, height / 2);
   }
@@ -1229,7 +1258,7 @@ export class SpaceRenderer {
     const url =
       typeof space.properties.imageUrl === 'string' ? space.properties.imageUrl : undefined;
 
-    if (!url || space.geometry.type !== 'rectangle') {
+    if (space.type === 'textbox' || !url || space.geometry.type !== 'rectangle') {
       if (entry.image) {
         entry.image.sprite.destroy();
         entry.image = undefined;
