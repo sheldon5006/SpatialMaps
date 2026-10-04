@@ -1,15 +1,26 @@
 import { Application, Container, FederatedPointerEvent, Graphics } from 'pixi.js';
 import { Camera } from './camera';
+import { TypedEmitter } from './event-emitter';
 import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
+  StatusStyle,
   StatusStyleMap,
 } from './types';
 
 const WHEEL_ZOOM_INTENSITY = 0.0015;
 const MIN_WHEEL_FACTOR = 0.8;
 const MAX_WHEEL_FACTOR = 1.25;
+
+const HOVER_STROKE_COLOR = 0xffffff;
+const HOVER_STROKE_WIDTH = 2;
+const SELECTED_STROKE_WIDTH = 3;
+
+export interface SpatialMapEngineEvents extends Record<string, unknown> {
+  hover: string | null;
+  select: string[];
+}
 
 /**
  * SpatialMapEngine
@@ -31,7 +42,13 @@ export class SpatialMapEngine {
   private lastPointerY = 0;
 
   private readonly spaceGraphics = new Map<string, Graphics>();
+  private readonly spaceData = new Map<string, Space>();
   private statusStyles: StatusStyleMap = DEFAULT_STATUS_STYLES;
+
+  private hoveredId: string | null = null;
+  private readonly selectedIds = new Set<string>();
+
+  private readonly emitter = new TypedEmitter<SpatialMapEngineEvents>();
 
   /**
    * Boots the PixiJS application into the given host element.
@@ -114,6 +131,40 @@ export class SpatialMapEngine {
     this.statusStyles = { ...DEFAULT_STATUS_STYLES, ...styles };
   }
 
+  on<K extends keyof SpatialMapEngineEvents>(
+    event: K,
+    listener: (payload: SpatialMapEngineEvents[K]) => void,
+  ): void {
+    this.emitter.on(event, listener);
+  }
+
+  off<K extends keyof SpatialMapEngineEvents>(
+    event: K,
+    listener: (payload: SpatialMapEngineEvents[K]) => void,
+  ): void {
+    this.emitter.off(event, listener);
+  }
+
+  /** Toggles a space's selection state. Selection is multi-select by default. */
+  selectSpace(id: string, selected: boolean): void {
+    if (selected === this.selectedIds.has(id)) return;
+    if (selected) {
+      this.selectedIds.add(id);
+    } else {
+      this.selectedIds.delete(id);
+    }
+    this.repaint(id);
+    this.emitter.emit('select', Array.from(this.selectedIds));
+  }
+
+  clearSelection(): void {
+    if (this.selectedIds.size === 0) return;
+    const previouslySelected = Array.from(this.selectedIds);
+    this.selectedIds.clear();
+    previouslySelected.forEach((id) => this.repaint(id));
+    this.emitter.emit('select', []);
+  }
+
   /**
    * Replaces the full set of rendered spaces. Later this will diff instead
    * of clear-and-rebuild, but a naive implementation is the right size for
@@ -126,8 +177,12 @@ export class SpatialMapEngine {
 
     this.world.removeChildren();
     this.spaceGraphics.clear();
+    this.spaceData.clear();
+    this.selectedIds.clear();
+    this.hoveredId = null;
 
     for (const space of spaces) {
+      this.spaceData.set(space.id, space);
       const graphic = this.createSpaceGraphic(space);
       this.spaceGraphics.set(space.id, graphic);
       this.world.addChild(graphic);
@@ -135,19 +190,10 @@ export class SpatialMapEngine {
   }
 
   private createSpaceGraphic(space: Space): Graphics {
-    const { geometry, properties } = space;
-    const style =
-      (properties.status && this.statusStyles[properties.status]) ||
-      FALLBACK_STATUS_STYLE;
+    const graphic = new Graphics();
+    this.paintSpace(graphic, space);
 
-    const graphic = new Graphics()
-      .rect(0, 0, geometry.width, geometry.height)
-      .fill({ color: style.fill, alpha: style.fillAlpha ?? 1 });
-
-    if (style.strokeWidth) {
-      graphic.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
-    }
-
+    const { geometry } = space;
     // Position by center + pivot so rotation (when present) is around the
     // rectangle's own center rather than its top-left corner.
     graphic.pivot.set(geometry.width / 2, geometry.height / 2);
@@ -160,7 +206,68 @@ export class SpatialMapEngine {
     graphic.cursor = 'pointer';
     graphic.label = space.id;
 
+    graphic.on('pointerover', () => this.setHover(space.id));
+    graphic.on('pointerout', () => this.setHover(null));
+    graphic.on('pointertap', () => this.selectSpace(space.id, !this.selectedIds.has(space.id)));
+
     return graphic;
+  }
+
+  /** Redraws one space's fill/stroke using its current status + hover/selection state. */
+  private paintSpace(graphic: Graphics, space: Space): void {
+    const { geometry, properties } = space;
+    const baseStyle =
+      (properties.status && this.statusStyles[properties.status]) || FALLBACK_STATUS_STYLE;
+    const style = this.applyInteractionState(space.id, baseStyle);
+
+    graphic
+      .clear()
+      .rect(0, 0, geometry.width, geometry.height)
+      .fill({ color: style.fill, alpha: style.fillAlpha ?? 1 });
+
+    if (style.strokeWidth) {
+      graphic.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
+    }
+  }
+
+  /** Layers hover/selection accents on top of a space's base status style. */
+  private applyInteractionState(id: string, base: StatusStyle): StatusStyle {
+    const isSelected = this.selectedIds.has(id);
+    const isHovered = this.hoveredId === id;
+
+    if (isSelected) {
+      const selectedStyle = this.statusStyles.selected ?? DEFAULT_STATUS_STYLES.selected;
+      return {
+        ...base,
+        stroke: selectedStyle.fill,
+        strokeWidth: SELECTED_STROKE_WIDTH,
+      };
+    }
+
+    if (isHovered) {
+      return {
+        ...base,
+        stroke: HOVER_STROKE_COLOR,
+        strokeWidth: Math.max(base.strokeWidth ?? 1, HOVER_STROKE_WIDTH),
+      };
+    }
+
+    return base;
+  }
+
+  private setHover(id: string | null): void {
+    if (this.hoveredId === id) return;
+    const previous = this.hoveredId;
+    this.hoveredId = id;
+    if (previous) this.repaint(previous);
+    if (id) this.repaint(id);
+    this.emitter.emit('hover', id);
+  }
+
+  private repaint(id: string): void {
+    const graphic = this.spaceGraphics.get(id);
+    const space = this.spaceData.get(id);
+    if (graphic && space) this.paintSpace(graphic, space);
   }
 
   destroy(): void {
@@ -173,6 +280,9 @@ export class SpatialMapEngine {
     }
 
     this.spaceGraphics.clear();
+    this.spaceData.clear();
+    this.selectedIds.clear();
+    this.hoveredId = null;
     this.world = null;
     this.camera = null;
     this.app?.destroy(true, { children: true, texture: true });
