@@ -1,4 +1,5 @@
 import { DecimalPipe } from '@angular/common';
+import { DecimalPipe } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -42,6 +43,21 @@ const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string;
 const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = [
   { value: 'booth', label: 'Booth' },
   { value: 'prop', label: 'Prop' },
+];
+
+const PROP_COLOR_PALETTE = [
+  { value: '#64748b', label: 'Slate' },
+  { value: '#ef4444', label: 'Red' },
+  { value: '#f97316', label: 'Orange' },
+  { value: '#eab308', label: 'Yellow' },
+  { value: '#22c55e', label: 'Green' },
+  { value: '#14b8a6', label: 'Teal' },
+  { value: '#06b6d4', label: 'Cyan' },
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#8b5cf6', label: 'Purple' },
+  { value: '#ec4899', label: 'Pink' },
+  { value: '#a16207', label: 'Earth' },
+  { value: '#f5f5f4', label: 'Light' },
 ];
 
 /** Human-readable label + swatch color per status, for the legend and
@@ -286,6 +302,8 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
               </div>
             </label>
           }
+        }
+        
         <label class="field">
           <span>Status</span>
           <select [(ngModel)]="form.status">
