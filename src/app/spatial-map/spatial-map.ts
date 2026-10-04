@@ -1644,6 +1644,9 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly settingsOpen = signal(false);
   protected readonly gridEnabled = signal(true);
   protected readonly searchEnabled = signal(DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
+  protected focusEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+  protected focusDurationMs = DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+  protected focusColor = DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
@@ -1819,6 +1822,9 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.gridEnabled.set(grid.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled);
     this.gridSize = grid.size ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
     this.searchEnabled.set(settings.search?.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
+    this.focusEnabled = settings.focus?.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+    this.focusDurationMs = settings.focus?.durationMs ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+    this.focusColor = settings.focus?.color ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
     this.statusDefinitions = (this.statuses ?? DEFAULT_STATUS_DEFINITIONS).map((status) => ({ ...status }));
   }
 
@@ -1836,6 +1842,11 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       },
       search: {
         enabled: this.searchEnabled(),
+      },
+      focus: {
+        enabled: this.focusEnabled,
+        durationMs: this.focusDurationMs,
+        color: this.focusColor,
       },
     };
   }
@@ -1855,6 +1866,9 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     if (settings.grid?.enabled !== undefined) this.gridEnabled.set(settings.grid.enabled);
     if (settings.grid?.size !== undefined) this.gridSize = settings.grid.size;
     if (settings.search?.enabled !== undefined) this.searchEnabled.set(settings.search.enabled);
+    if (settings.focus?.enabled !== undefined) this.focusEnabled = settings.focus.enabled;
+    if (settings.focus?.durationMs !== undefined) this.focusDurationMs = Math.max(0, Math.round(settings.focus.durationMs));
+    if (settings.focus?.color !== undefined) this.focusColor = settings.focus.color;
 
     this.engine.setSettings(settings);
 
@@ -1942,8 +1956,27 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.engine.camera.fitBounds(undefined, options);
   }
 
-  flyTo(id: string, options?: Parameters<SpatialMapEngine['camera']['flyTo']>[1]): void {
+  flyTo(
+    id: string,
+    options?: Parameters<SpatialMapEngine['camera']['flyTo']>[1],
+  ): void {
     this.engine.camera.flyTo(id, options);
+
+    const durationMs = this.focusEnabled ? this.focusDurationMs : 0;
+    if (durationMs > 0) {
+      this.engine.focusSpace(id, {
+        durationMs,
+        color: this.focusColor,
+      });
+    }
+  }
+
+  setFocusSettings(focus: Partial<SpatialMapSettings['focus']>): void {
+    this.setMapSettings({ focus });
+  }
+
+  getFocusSettings(): SpatialMapSettings['focus'] {
+    return this.getMapSettings().focus;
   }
 
   setZoom(zoom: number): void {
@@ -2087,7 +2120,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
     // Keep the target booth in the visible map area rather than centering it
     // underneath the persistent search panel.
-    this.engine.camera.fitBounds([id], {
+    this.flyTo(id, {
       padding: MAP_VIEW_PADDING,
       maxZoom: 1.8,
       duration: 450,
