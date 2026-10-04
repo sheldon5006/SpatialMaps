@@ -1678,15 +1678,52 @@ export class SpaceRenderer {
     // Rope/tape construction: each italic segment slightly overlaps the
     // next one, so the colors read as a connected braided strip rather than
     // separate floating dashes.
-    const dashLength = Math.max(5.2, Math.min(7.2, minSide * 0.075));
-    const pitch = dashLength * 0.72;
-    const dashCount = Math.max(10, Math.ceil(perimeter / pitch));
-    const travel = perimeter / dashCount;
-    const slashAngle = Math.PI * 0.26;
+    // Continuous rope/tape construction. A metallic-grey base strand runs
+    // around the entire perimeter, with a neon-ink blue strand seated into it.
+    // Short overlapping wraps create the twisted-rope appearance with no gaps.
+    const ropeWidth = Math.max(2.2, Math.min(3.4, minSide * 0.028));
+    const innerWidth = ropeWidth * 0.62;
 
-    for (let index = 0; index < dashCount; index += 1) {
-      let distance = (index * travel + ropePhase * perimeter) % perimeter;
-      if (distance < 0) distance += perimeter;
+    // Continuous metallic strand — this is the part that removes any visual gap.
+    for (let i = 0; i < loop.length; i += 1) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      highlight.moveTo(a.x, a.y);
+      highlight.lineTo(b.x, b.y);
+    }
+    highlight.stroke({
+      color: 0xb9bec6,
+      alpha: 0.96 * strength,
+      width: ropeWidth,
+      cap: 'round',
+      join: 'round',
+    });
+
+    // Continuous ink-blue inner strand, slightly narrower and visually seated
+    // inside the metal strand instead of floating beside it.
+    for (let i = 0; i < loop.length; i += 1) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      highlight.moveTo(a.x, a.y);
+      highlight.lineTo(b.x, b.y);
+    }
+    highlight.stroke({
+      color: 0x00efff,
+      alpha: 0.98 * strength,
+      width: innerWidth,
+      cap: 'round',
+      join: 'round',
+    });
+
+    // Wrapped bands: dense, overlapping italic bands visually fuse the two
+    // strands into one braided/tape-like loop. Each band overlaps its
+    // neighbors, so there is no exposed gap between units.
+    const wrapPitch = Math.max(5, Math.min(7.5, minSide * 0.07));
+    const wrapLength = wrapPitch * 1.18;
+    const wrapCount = Math.max(12, Math.ceil(perimeter / wrapPitch));
+
+    for (let index = 0; index < wrapCount; index += 1) {
+      const distance = (index * perimeter / wrapCount + ropePhase * perimeter) % perimeter;
 
       let segmentIndex = 0;
       while (
@@ -1700,22 +1737,34 @@ export class SpaceRenderer {
       const next = segmentIndex === loop.length - 1
         ? { ...loop[0], distance: perimeter }
         : loop[segmentIndex + 1];
+
       const span = Math.max(0.001, next.distance - current.distance);
       const t = Math.max(0, Math.min(1, (distance - current.distance) / span));
       const cx = current.x + (next.x - current.x) * t;
       const cy = current.y + (next.y - current.y) * t;
       const tangent = Math.atan2(next.y - current.y, next.x - current.x);
-      const angle = tangent + slashAngle;
-      const half = dashLength * 0.5;
-      const dx = Math.cos(angle) * half;
-      const dy = Math.sin(angle) * half;
 
-      rope.moveTo(cx - dx, cy - dy);
-      rope.lineTo(cx + dx, cy + dy);
-      rope.stroke({
-        color: index % 2 === 0 ? 0x00efff : 0xe7e9ed,
-        alpha: 1.0 * strength,
-        width: 2.0,
+      // Perpendicular to the perimeter tangent, then slightly slanted so the
+      // wraps read like hand-wrapped tape rather than fence posts.
+      const normalX = -Math.sin(tangent);
+      const normalY = Math.cos(tangent);
+      const tangentX = Math.cos(tangent);
+      const tangentY = Math.sin(tangent);
+      const slash = Math.PI * 0.18;
+      const along = Math.cos(slash) * (wrapLength * 0.5);
+      const across = Math.sin(slash) * (ropeWidth * 0.8);
+
+      const x1 = cx - tangentX * along - normalX * across;
+      const y1 = cy - tangentY * along - normalY * across;
+      const x2 = cx + tangentX * along + normalX * across;
+      const y2 = cy + tangentY * along + normalY * across;
+
+      highlight.moveTo(x1, y1);
+      highlight.lineTo(x2, y2);
+      highlight.stroke({
+        color: index % 2 === 0 ? 0x00efff : 0xdfe3e8,
+        alpha: 0.98 * strength,
+        width: Math.max(1.5, ropeWidth * 0.72),
         cap: 'round',
       });
     }
