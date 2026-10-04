@@ -729,6 +729,86 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         box-shadow: 0 18px 50px rgba(0, 0, 0, 0.30);
       }
 
+      .status-filter-control {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .filter-all-btn {
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.06);
+        color: #c3c7d1;
+        padding: 6px 12px;
+        border-radius: 7px;
+      }
+
+      .filter-all-btn.active {
+        background: #3a7afe;
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        flex: 0 0 auto;
+        display: inline-block;
+        border-radius: 50%;
+        box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.28);
+      }
+
+      .mode-switch button {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .toolbar-select-shell,
+      .select-shell {
+        position: relative;
+      }
+
+      .toolbar-select-shell::after,
+      .select-shell::after {
+        content: '⌄';
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-55%);
+        color: #aeb4bf;
+        pointer-events: none;
+        font-size: 14px;
+      }
+
+      .toolbar-select-shell select,
+      .select-shell select {
+        appearance: none;
+        -webkit-appearance: none;
+        width: 100%;
+        min-width: 148px;
+        padding: 7px 32px 7px 10px;
+        border-radius: 7px;
+        border: 1px solid rgba(255, 255, 255, 0.13);
+        background: #20242b;
+        color: #e8eaf0;
+        color-scheme: dark;
+        font: inherit;
+        outline: none;
+      }
+
+      .toolbar-select-shell select:focus,
+      .select-shell select:focus {
+        border-color: #3a7afe;
+        box-shadow: 0 0 0 2px rgba(58, 122, 254, 0.18);
+      }
+
+      .toolbar-select-shell select option,
+      .select-shell select option {
+        background: #20242b;
+        color: #e8eaf0;
+      }
+
       .settings-header {
         display: flex;
         align-items: center;
@@ -747,6 +827,107 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         text-transform: uppercase;
         letter-spacing: 0.04em;
         color: #7f8794;
+      }
+
+      .settings-section-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .settings-count {
+        min-width: 22px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.08);
+        color: #aeb4bf;
+        text-align: center;
+        font-size: 11px;
+      }
+
+      .status-list {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 7px 8px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.035);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+      }
+
+      .status-row-main {
+        min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+
+      .status-row-main strong {
+        color: #e6e8ed;
+        font-size: 12px;
+      }
+
+      .status-row-main small {
+        color: #757d89;
+        font-size: 10px;
+      }
+
+      .status-dot.large {
+        width: 12px;
+        height: 12px;
+      }
+
+      .status-color-input {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        background: transparent;
+        overflow: hidden;
+      }
+
+      .status-remove-btn {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: #949ba6;
+        border-radius: 6px;
+      }
+
+      .status-remove-btn:hover:not(:disabled) {
+        background: rgba(226, 75, 74, 0.16);
+        color: #ff9a9a;
+      }
+
+      .status-remove-btn:disabled {
+        opacity: 0.25;
+        cursor: not-allowed;
+      }
+
+      .status-add-row {
+        display: grid;
+        grid-template-columns: 1fr 36px auto;
+        gap: 6px;
+      }
+
+      .status-add-row input[type='text'] {
+        min-width: 0;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: #e8eaf0;
+        padding: 7px 9px;
+        font: inherit;
       }
 
       .settings-grid {
@@ -836,8 +1017,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
       }
 
       .field input[type='text'],
-      .field input[type='number'],
-      .field select {
+      .field input[type='number'] {
         background: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.12);
         border-radius: 6px;
@@ -1207,6 +1387,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       this.engine.setZoomLimits({ minZoom: this.viewMinZoom, maxZoom: this.viewMaxZoom });
       this.engine.setGridEnabled(this.gridEnabled());
       this.engine.setGridSize(this.gridSize);
+      this.applyStatusStyles();
       this.engine.loadSpaces(TEST_SPACES);
       // Start from a complete map view instead of the engine's 60px/60px
       // world offset. Fit is allowed to go below the interactive readable
@@ -1223,7 +1404,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
           this.hoveredId.set(id);
           const space = id ? this.engine.getSpace(id) : undefined;
           this.hoverPreview.set(
-            space ? { name: space.properties.name ?? id!, status: space.properties.status ?? '—' } : null,
+            space
+            ? {
+                name: space.properties.name ?? id!,
+                status: this.statusLabel(space.properties.status),
+              }
+            : null,
           );
         }),
       );
@@ -1325,9 +1511,93 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
     this.visualFilter.set(kind);
-    if (kind === 'all') this.engine.setVisualFilter({ type: 'all' });
-    else if (kind === 'selected') this.engine.setVisualFilter({ type: 'selected' });
-    else this.engine.setVisualFilter({ type: 'status', status: kind });
+    if (kind === 'all') {
+      this.statusFilterSelection = '';
+      this.engine.setVisualFilter({ type: 'all' });
+    } else if (kind === 'selected') {
+      this.statusFilterSelection = '';
+      this.engine.setVisualFilter({ type: 'selected' });
+    } else {
+      this.statusFilterSelection = kind;
+      this.engine.setVisualFilter({ type: 'status', status: kind });
+    }
+  }
+
+  protected statusLabel(status: string | undefined): string {
+    if (!status) return '—';
+    return this.statusDefinitions.find((item) => item.key === status)?.label ?? status;
+  }
+
+  private applyStatusStyles(): void {
+    const styles = Object.fromEntries(
+      this.statusDefinitions.map((status) => {
+        const fill = this.hexToNumber(status.color);
+        return [
+          status.key,
+          {
+            fill,
+            stroke: fill,
+            strokeWidth: 1,
+          },
+        ];
+      }),
+    );
+    this.engine.setStatusStyles(styles);
+  }
+
+  private hexToNumber(value: string): number {
+    const normalized = value.trim().replace(/^#/, '');
+    return /^[0-9a-fA-F]{6}$/.test(normalized)
+      ? Number.parseInt(normalized, 16)
+      : 0x64748b;
+  }
+
+  protected addStatus(): void {
+    const label = this.newStatusLabel.trim();
+    if (!label) return;
+
+    const baseKey = label
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '') || 'status';
+
+    let key = baseKey;
+    let suffix = 2;
+    while (this.statusDefinitions.some((status) => status.key === key)) {
+      key = `${baseKey}-${suffix++}`;
+    }
+
+    this.statusDefinitions = [
+      ...this.statusDefinitions,
+      { key, label, color: this.newStatusColor },
+    ];
+    this.applyStatusStyles();
+    this.newStatusLabel = '';
+    this.statusFilterSelection = '';
+  }
+
+  protected updateStatusColor(key: string, color: string): void {
+    this.statusDefinitions = this.statusDefinitions.map((status) =>
+      status.key === key ? { ...status, color } : status,
+    );
+    this.applyStatusStyles();
+  }
+
+  protected isStatusInUse(key: string): boolean {
+    return this.engine
+      .exportData()
+      .spaces.some((space) => space.type === 'booth' && space.properties.status === key);
+  }
+
+  protected removeStatus(key: string): void {
+    if (this.isStatusInUse(key)) return;
+
+    const next = this.statusDefinitions.filter((status) => status.key !== key);
+    if (next.length === 0) return;
+
+    this.statusDefinitions = next;
+    if (this.visualFilter() === key) this.setVisualFilter('all');
+    this.applyStatusStyles();
   }
 
   private syncDrawerToSelection(ids: string[]): void {
