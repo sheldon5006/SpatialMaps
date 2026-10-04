@@ -1728,6 +1728,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.statusFilterSelection = kind;
       this.engine.setVisualFilter({ type: 'status', status: kind });
     }
+    this.filterChange.emit(kind);
   }
 
   protected statusLabel(status: string | undefined): string {
