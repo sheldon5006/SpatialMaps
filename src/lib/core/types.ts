@@ -4,13 +4,15 @@
  * their integrations against.
  */
 
-export type SpaceStatus =
-  | 'available'
-  | 'reserved'
-  | 'booked'
-  | 'unavailable'
-  | 'maintenance'
-  | 'selected';
+/** A business status assigned to a map space. "all" and "selected" are UI
+ * filters, not statuses, so they deliberately do not belong here. */
+export type SpaceStatus = string;
+
+export interface MapStatusDefinition {
+  key: string;
+  label: string;
+  color: string;
+}
 
 /** High-level role of a map element. */
 export type SpaceElementType = 'booth' | 'prop' | 'textbox';
@@ -112,16 +114,15 @@ export interface StatusStyle {
   strokeWidth?: number;
 }
 
-export type StatusStyleMap = Partial<Record<SpaceStatus, StatusStyle>>;
+export type StatusStyleMap = Partial<Record<string, StatusStyle>>;
 
 /** Placeholder palette — developers are expected to override this. */
-export const DEFAULT_STATUS_STYLES: Required<StatusStyleMap> = {
+export const DEFAULT_STATUS_STYLES: StatusStyleMap = {
   available: { fill: 0x2ecc71, stroke: 0x1b8a4e, strokeWidth: 1 },
   reserved: { fill: 0xf1c40f, stroke: 0xa98307, strokeWidth: 1 },
   booked: { fill: 0xe67e22, stroke: 0xa85a14, strokeWidth: 1 },
   unavailable: { fill: 0x7f8c8d, stroke: 0x56605f, strokeWidth: 1 },
   maintenance: { fill: 0x9b59b6, stroke: 0x6c3d80, strokeWidth: 1 },
-  selected: { fill: 0x3498db, stroke: 0x1f618d, strokeWidth: 2 },
 };
 
 export const FALLBACK_STATUS_STYLE: StatusStyle = {
