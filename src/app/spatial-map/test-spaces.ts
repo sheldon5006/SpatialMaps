@@ -275,7 +275,7 @@ export const TEST_SPACES: Space[] = [
 
   // ---- General store -----------------------------------------------------
 
-  boothRow('store', 'Store', 310, 92, 2, 2, 1).map((space) => ({
+  ...boothRow('store', 'Store', 310, 92, 2, 2, 1).map((space) => ({
     ...space,
     geometry: {
       ...space.geometry,
