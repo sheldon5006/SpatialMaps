@@ -445,7 +445,7 @@ export class SpaceRenderer {
 
       if (recede) {
         entry.node.filters = this.focusFilters;
-        entry.node.alpha = FOCUS_DIM_ALPHA;
+        entry.node.alpha = FILTER_GLASS_ALPHA;
         entry.node.scale.set(1);
         entry.glass.visible = true;
       } else {
@@ -682,7 +682,7 @@ export class SpaceRenderer {
     entry.label.position.set(width / 2, height / 2);
   }
 
-  /** The translucent pane shown over a receded (focus-dimmed) space. */
+  /** The translucent pane shown over a receded (filter-receded) space. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     glass
       .clear()
