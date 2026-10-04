@@ -42,20 +42,16 @@ const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string;
 ];
 const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = [
   { value: 'booth', label: 'Booth' },
-  { value: 'infrastructure', label: 'Infrastructure' },
   { value: 'prop', label: 'Prop' },
 ];
 
-const INFRASTRUCTURE_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
+const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
   { value: 'road', label: 'Road' },
   { value: 'path', label: 'Path' },
   { value: 'building', label: 'Building' },
   { value: 'parking', label: 'Parking' },
   { value: 'entrance', label: 'Entrance' },
   { value: 'garden', label: 'Garden' },
-];
-
-const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
   { value: 'tree', label: 'Tree' },
   { value: 'bench', label: 'Bench' },
   { value: 'seating', label: 'Seating' },
@@ -65,21 +61,11 @@ const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
 ];
 
 function defaultShapeForElement(type: SpaceElementType): SpaceGeometry['type'] {
-  switch (type) {
-    case 'infrastructure':
-      return 'line';
-    case 'prop':
-      return 'circle';
-    case 'booth':
-    default:
-      return 'rectangle';
-  }
+  return type === 'prop' ? 'circle' : 'rectangle';
 }
 
 function defaultPropKindForElement(type: SpaceElementType): SpacePropKind | null {
-  if (type === 'infrastructure') return 'path';
-  if (type === 'prop') return 'tree';
-  return null;
+  return type === 'prop' ? 'tree' : null;
 }
 
 /** Human-readable label + swatch color per status, for the legend and
@@ -217,10 +203,12 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <button class="icon-btn" (click)="closeForm()">Close</button>
         </div>
 
-        <label class="field">
-          <span>Name</span>
-          <input type="text" [(ngModel)]="form.name" placeholder="e.g. Booth A101" />
-        </label>
+        @if (form.elementType === 'booth') {
+          <label class="field">
+            <span>Name</span>
+            <input type="text" [(ngModel)]="form.name" placeholder="e.g. Booth A101" />
+          </label>
+        }
 
         @if (mode() === 'edit') {
           <label class="field">
@@ -242,7 +230,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 
           @if (form.elementType !== 'booth') {
             <label class="field">
-              <span>{{ form.elementType === 'infrastructure' ? 'Infrastructure type' : 'Prop type' }}</span>
+              <span>Prop type</span>
               <select [(ngModel)]="form.propKind" (ngModelChange)="onPropKindChange($event)">
                 @for (option of currentPropOptions(); track option.value) {
                   <option [ngValue]="option.value">{{ option.label }}</option>
@@ -829,7 +817,6 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly sizePresets = SIZE_PRESETS;
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
-  protected readonly infrastructureOptions = INFRASTRUCTURE_OPTIONS;
   protected readonly propOptions = PROP_OPTIONS;
   protected form: SpaceFormState = defaultFormState();
 
@@ -934,7 +921,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
-      elementType: space.type === 'infrastructure' ? 'infrastructure' : space.type === 'prop' ? 'prop' : 'booth',
+      elementType: space.type === 'prop' || space.type === 'infrastructure' ? 'prop' : 'booth',
       propKind: space.properties.propKind ?? null,
       shape: space.geometry.type,
       width: space.geometry.width,
@@ -969,6 +956,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form.propKind = defaultPropKindForElement(elementType);
     this.form.shape = defaultShapeForElement(elementType);
 
+    if (elementType === 'prop') {
+      this.form.name = '';
+    }
+
     if (this.form.shape === 'circle') {
       const diameter = Math.max(4, Number(this.form.width) || 80);
       this.form.width = diameter;
@@ -977,9 +968,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected currentPropOptions(): Array<{ value: SpacePropKind; label: string }> {
-    return this.form.elementType === 'infrastructure'
-      ? this.infrastructureOptions
-      : this.propOptions;
+    return this.propOptions;
   }
 
   protected onPropKindChange(kind: SpacePropKind | null): void {
@@ -1041,7 +1030,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
         type: savedType,
         geometry: { type: shape, ...position, width: w, height: h },
         properties: {
-          name: name || id,
+          name: savedType === 'booth' ? (name || id) : undefined,
           status,
           propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
           imageUrl: savedType === 'booth' && shape === 'rectangle'
@@ -1061,7 +1050,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       type: savedType,
       geometry: { type: shape, width: w, height: h },
       properties: {
-        name: name || id,
+        name: savedType === 'booth' ? (name || id) : undefined,
         status,
         propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
         imageUrl: savedType === 'booth' && shape === 'rectangle'
