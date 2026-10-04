@@ -1014,7 +1014,7 @@ export class SpaceRenderer {
           .fill({ color, alpha: 0.95 });
         shape
           .circle(width * 0.65, height * 0.45, Math.min(width, height) * 0.16)
-          .fill({ color: 0x4fae45, alpha: 0.95 });
+          .fill({ color, alpha: 0.95 });
         break;
 
       case 'road':
