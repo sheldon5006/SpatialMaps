@@ -886,7 +886,6 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly sizePresets = SIZE_PRESETS;
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
-  protected readonly propOptions = PROP_OPTIONS;
   protected readonly propColorPalette = PROP_COLOR_PALETTE;
   protected form: SpaceFormState = defaultFormState();
 
