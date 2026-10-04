@@ -21,7 +21,6 @@ import {
 
 const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
-const SELECTED_STROKE_WIDTH = 3;
 const SELECTED_COLOR = 0x3498db;
 
 const CHECK_BADGE_RADIUS = 8;
