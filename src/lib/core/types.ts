@@ -12,6 +12,24 @@ export type SpaceStatus =
   | 'maintenance'
   | 'selected';
 
+/** High-level role of a map element. */
+export type SpaceElementType = 'booth' | 'infrastructure' | 'prop';
+
+/** Basic infrastructure/prop vocabulary for venue and market maps. */
+export type SpacePropKind =
+  | 'road'
+  | 'path'
+  | 'building'
+  | 'parking'
+  | 'entrance'
+  | 'garden'
+  | 'tree'
+  | 'bench'
+  | 'seating'
+  | 'toilet'
+  | 'garbage-bin'
+  | 'information';
+
 interface BaseGeometry {
   x: number;
   y: number;
@@ -66,6 +84,8 @@ export type SpaceGeometry =
 export interface SpaceProperties {
   name?: string;
   status?: SpaceStatus;
+  /** Specific infrastructure/prop kind when type is not a booth. */
+  propKind?: SpacePropKind;
   /** Rendered as an image fill on top of the status color when set. */
   imageUrl?: string;
   [key: string]: unknown;
@@ -73,7 +93,8 @@ export interface SpaceProperties {
 
 export interface Space {
   id: string;
-  type?: string;
+  /** Map element role. Kept as a string-compatible field for future custom roles. */
+  type?: SpaceElementType | string;
   geometry: SpaceGeometry;
   properties: SpaceProperties;
 }
