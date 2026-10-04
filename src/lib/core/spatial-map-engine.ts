@@ -1,10 +1,15 @@
-import { Application, Container, Graphics } from 'pixi.js';
+import { Application, Container, FederatedPointerEvent, Graphics } from 'pixi.js';
+import { Camera } from './camera';
 import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
   StatusStyleMap,
 } from './types';
+
+const WHEEL_ZOOM_INTENSITY = 0.0015;
+const MIN_WHEEL_FACTOR = 0.8;
+const MAX_WHEEL_FACTOR = 1.25;
 
 /**
  * SpatialMapEngine
@@ -17,8 +22,13 @@ export class SpatialMapEngine {
   private app: Application | null = null;
 
   /** Everything spatial (spaces, future background layers) lives in here.
-   *  The camera (step 1.4) will transform this container, not the stage. */
+   *  The camera transforms this container, not the stage. */
   private world: Container | null = null;
+  private camera: Camera | null = null;
+
+  private isPanning = false;
+  private lastPointerX = 0;
+  private lastPointerY = 0;
 
   private readonly spaceGraphics = new Map<string, Graphics>();
   private statusStyles: StatusStyleMap = DEFAULT_STATUS_STYLES;
@@ -42,11 +52,62 @@ export class SpatialMapEngine {
     this.app = app;
 
     this.world = new Container();
-    // Fixed padding until the camera (pan/zoom/fit-to-view) lands in the
-    // next step and takes over positioning the world container.
+    // Fixed starting offset so the first-loaded spaces aren't flush
+    // against the corner. The camera moves the world from here on.
     this.world.position.set(60, 60);
     app.stage.addChild(this.world);
+
+    this.camera = new Camera(this.world);
+    this.setupInteraction(app);
   }
+
+  private setupInteraction(app: Application): void {
+    app.stage.eventMode = 'static';
+    app.stage.hitArea = app.screen;
+    app.stage.cursor = 'grab';
+
+    app.stage.on('pointerdown', this.onPointerDown);
+    app.stage.on('globalpointermove', this.onPointerMove);
+    app.stage.on('pointerup', this.onPointerUp);
+    app.stage.on('pointerupoutside', this.onPointerUp);
+
+    app.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+  }
+
+  private readonly onPointerDown = (event: FederatedPointerEvent): void => {
+    this.isPanning = true;
+    this.lastPointerX = event.global.x;
+    this.lastPointerY = event.global.y;
+    if (this.app) this.app.stage.cursor = 'grabbing';
+  };
+
+  private readonly onPointerMove = (event: FederatedPointerEvent): void => {
+    if (!this.isPanning || !this.camera) return;
+    const dx = event.global.x - this.lastPointerX;
+    const dy = event.global.y - this.lastPointerY;
+    this.lastPointerX = event.global.x;
+    this.lastPointerY = event.global.y;
+    this.camera.pan(dx, dy);
+  };
+
+  private readonly onPointerUp = (): void => {
+    this.isPanning = false;
+    if (this.app) this.app.stage.cursor = 'grab';
+  };
+
+  private readonly onWheel = (event: WheelEvent): void => {
+    if (!this.camera || !this.app) return;
+    event.preventDefault();
+
+    const rect = this.app.canvas.getBoundingClientRect();
+    const screenX = event.clientX - rect.left;
+    const screenY = event.clientY - rect.top;
+
+    const rawFactor = Math.exp(-event.deltaY * WHEEL_ZOOM_INTENSITY);
+    const factor = Math.min(MAX_WHEEL_FACTOR, Math.max(MIN_WHEEL_FACTOR, rawFactor));
+
+    this.camera.zoomAt(screenX, screenY, factor);
+  };
 
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
@@ -103,8 +164,17 @@ export class SpatialMapEngine {
   }
 
   destroy(): void {
+    if (this.app) {
+      this.app.stage.off('pointerdown', this.onPointerDown);
+      this.app.stage.off('globalpointermove', this.onPointerMove);
+      this.app.stage.off('pointerup', this.onPointerUp);
+      this.app.stage.off('pointerupoutside', this.onPointerUp);
+      this.app.canvas.removeEventListener('wheel', this.onWheel);
+    }
+
     this.spaceGraphics.clear();
     this.world = null;
+    this.camera = null;
     this.app?.destroy(true, { children: true, texture: true });
     this.app = null;
   }
