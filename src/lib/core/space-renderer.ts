@@ -1211,8 +1211,8 @@ export class SpaceRenderer {
     entry.label.text = displayText;
 
     const targetScreenFont = showTextboxText
-      ? (screenWidth < 130 ? 12 : 15)
-      : (screenWidth < 76 ? 10 : 11.5);
+      ? (screenWidth < 130 ? 13 : 16)
+      : (screenWidth < 76 ? 12 : 15);
 
     entry.label.style.fontSize = targetScreenFont / zoom;
     const textColor = this.parsePropColor(
@@ -1225,7 +1225,7 @@ export class SpaceRenderer {
     );
     const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
       ? 0
-      : Math.min(4, showTextboxText ? 1.8 / zoom : 2.2 / zoom);
+      : Math.min(2.5, showTextboxText ? 1.4 / zoom : 1.0 / zoom);
 
     entry.label.style.fill = textColor;
     entry.label.style.stroke = { color: outlineColor, width: outlineWidth };
