@@ -141,7 +141,7 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
   exportAs: 'spatialMap',
   imports: [DecimalPipe, FormsModule],
   template: `
-    <div class="spatial-map-root">
+    <div class="spatial-map-root" [class.search-open]="mode() === 'view' && searchEnabled()">
       <!-- Top toolbar: a real in-flow header, not an overlay — the canvas
            area below it is the only thing the camera/handles ever need to
            reason about, so nothing rendered near world-space (0,0) can
@@ -212,7 +212,7 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
       </div>
 
       <div class="canvas-area">
-        @if (mode() === 'view') {
+        @if (mode() === 'view' && searchEnabled()) {
           <aside class="search-panel" aria-label="Search spaces">
             <div class="search-panel-header">
               <div>
@@ -290,6 +290,18 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
             <div class="settings-header">
               <strong>Map settings</strong>
               <button class="icon-btn" (click)="settingsOpen.set(false)">Close</button>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">Search</span>
+              <label class="toggle-option">
+                <input
+                  type="checkbox"
+                  [ngModel]="searchEnabled()"
+                  (ngModelChange)="setSearchEnabled($event)"
+                />
+                <span>Show booth search</span>
+              </label>
             </div>
 
             <div class="settings-section">
@@ -792,7 +804,14 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
 
       .map-pane {
         position: absolute;
-        inset: 0;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+      }
+
+      .spatial-map-root.search-open .map-pane {
+        left: 308px;
       }
 
       .search-panel {
@@ -1623,6 +1642,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly mapTheme = signal<MapTheme>('light');
   protected readonly settingsOpen = signal(false);
   protected readonly gridEnabled = signal(true);
+  protected readonly searchEnabled = signal(DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
@@ -1796,6 +1816,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.viewMaxZoom = zoom.maxZoom ?? DEFAULT_SPATIAL_MAP_SETTINGS.zoom.maxZoom;
     this.gridEnabled.set(grid.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled);
     this.gridSize = grid.size ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
+    this.searchEnabled.set(settings.search?.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
     this.statusDefinitions = (this.statuses ?? DEFAULT_STATUS_DEFINITIONS).map((status) => ({ ...status }));
   }
 
@@ -1810,6 +1831,9 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       grid: {
         enabled: this.gridEnabled(),
         size: this.gridSize,
+      },
+      search: {
+        enabled: this.searchEnabled(),
       },
     };
   }
@@ -1828,8 +1852,16 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     if (settings.zoom?.maxZoom !== undefined) this.viewMaxZoom = settings.zoom.maxZoom;
     if (settings.grid?.enabled !== undefined) this.gridEnabled.set(settings.grid.enabled);
     if (settings.grid?.size !== undefined) this.gridSize = settings.grid.size;
+    if (settings.search?.enabled !== undefined) this.searchEnabled.set(settings.search.enabled);
 
     this.engine.setSettings(settings);
+
+    if (settings.search?.enabled !== undefined) {
+      this.engine.camera.fitBounds(undefined, {
+        padding: this.searchEnabled() ? SEARCH_PANEL_PADDING : { top: 24, right: 24, bottom: 24, left: 24 },
+        duration: 250,
+      });
+    }
   }
 
   getMapSettings(): SpatialMapSettings {
@@ -2017,15 +2049,23 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.searchQuery.set('');
   }
 
+  protected setSearchEnabled(enabled: boolean): void {
+    this.searchEnabled.set(enabled);
+    this.setMapSettings({
+      search: { enabled },
+    });
+  }
+
   protected searchDisplayName(space: Space): string {
-    const name = space.properties.name ?? space.id;
-    return name.split('\\n')[0] || space.id;
+    return space.id;
   }
 
   protected searchLongName(space: Space): string {
-    const name = space.properties.name ?? '';
-    const lines = name.split('\\n');
-    return lines.length > 1 ? lines.slice(1).join(' ') : (name === space.id ? 'Untitled booth' : name);
+    const raw = (space.properties.name ?? '').replace(/\\n/g, ' ').trim();
+    const prefixed = raw.toLowerCase().startsWith(space.id.toLowerCase())
+      ? raw.slice(space.id.length).replace(/^[-:\s]+/, '').trim()
+      : raw;
+    return prefixed || 'Untitled booth';
   }
 
   protected statusColor(status: string | undefined): string {
