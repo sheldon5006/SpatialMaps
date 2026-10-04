@@ -38,6 +38,15 @@ const exitImage = (): string => svgDataUrl(`
   <text x="46" y="67" text-anchor="middle" font-family="Arial" font-size="11" font-weight="900" fill="#158347">EMERGENCY EXIT</text>
 </svg>`);
 
+const entranceImage = (): string => svgDataUrl(`
+<svg xmlns="http://www.w3.org/2000/svg" width="110" height="90" viewBox="0 0 110 90">
+  <path d="M18 0 H92 V34 H18 Z" fill="#ffffff"/>
+  <path d="M18 0 V34 M92 0 V34" stroke="#0d6ea8" stroke-width="2"/>
+  <path d="M55 0 V34" stroke="#0d6ea8" stroke-width="2"/>
+  <path d="M18 34 Q34 70 55 34 Q76 70 92 34" fill="none" stroke="#202a30" stroke-width="2"/>
+  <text x="55" y="76" text-anchor="middle" font-family="Arial" font-size="16" font-weight="900" fill="#0875ac">ENTRANCE</text>
+</svg>`);
+
 const compassScaleImage = (): string => svgDataUrl(`
 <svg xmlns="http://www.w3.org/2000/svg" width="360" height="72" viewBox="0 0 360 72">
   <g transform="translate(8 4)">
@@ -245,7 +254,7 @@ export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
   imageProp('exit-left', 'Emergency Exit', 8, 228, 78, 80, exitImage()),
   imageProp('exit-right', 'Emergency Exit', 1258, 228, 78, 80, exitImage()),
-  imageProp('main-entrance', 'Entrance', 623, 658, 100, 76, exitImage()),
+  imageProp('main-entrance', 'Entrance', 617, 656, 110, 90, entranceImage()),
 
   // ------------------------------------------------------------------------
   // 5. North arrow + scale
