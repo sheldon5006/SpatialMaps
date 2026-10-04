@@ -20,6 +20,7 @@ import {
   DEFAULT_MAP_STATUS_DEFINITIONS,
   DEFAULT_SPATIAL_MAP_SETTINGS,
   SpatialMapSettings,
+  SpatialMapSettingsPatch,
 } from '../../lib/core/spatial-map-settings';
 import {
   Space,
@@ -1337,7 +1338,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   /** Optional application-controlled data source. Omit to keep the existing demo fixture. */
   @Input() spaces: Space[] | null = null;
   /** Optional application-controlled runtime settings. */
-  @Input() settings: Partial<SpatialMapSettings> | null = null;
+  @Input() settings: SpatialMapSettingsPatch | null = null;
   /** Optional application-controlled status definitions. */
   @Input() statuses: MapStatusDefinition[] | null = null;
 
@@ -1528,7 +1529,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
    * The built-in Angular controls call the same public methods, so external
    * code can drive the map without bypassing or replacing the UI workflow.
    */
-  setMapSettings(settings: Partial<SpatialMapSettings>): void {
+  setMapSettings(settings: SpatialMapSettingsPatch): void {
     this.settings = { ...(this.settings ?? {}), ...settings };
 
     if (settings.theme) this.mapTheme.set(settings.theme);
