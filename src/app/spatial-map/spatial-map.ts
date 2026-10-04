@@ -1080,16 +1080,29 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly lastTransform = signal<string | null>(null);
   protected readonly mode = signal<MapMode>('view');
   protected readonly visualFilter = signal<'all' | SpaceStatus | 'selected'>('all');
+  protected statusDefinitions: MapStatusDefinition[] = DEFAULT_STATUS_DEFINITIONS.map((status) => ({ ...status }));
+  protected statusFilterSelection = '';
+  protected newStatusLabel = '';
+  protected newStatusColor = '#3b82f6';
   protected readonly mapTheme = signal<MapTheme>('light');
   protected readonly settingsOpen = signal(false);
   protected readonly gridEnabled = signal(true);
-  protected readonly statusMeta = STATUS_META;
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
 
   protected readonly benchSizes = BENCH_SIZES;
-  protected readonly statusOptions = STATUS_OPTIONS;
+  protected get statusOptions(): string[] {
+    return this.statusDefinitions.map((status) => status.key);
+  }
+
+  protected get statusCount(): number {
+    return this.statusDefinitions.length;
+  }
+
+  protected get useStatusDropdown(): boolean {
+    return this.statusDefinitions.length > 5;
+  }
   protected readonly sizePresets = SIZE_PRESETS;
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
