@@ -1,4 +1,5 @@
 import { Application, Container, FederatedPointerEvent, Graphics } from 'pixi.js';
+import { unionBounds } from './bounds';
 import { Camera } from './camera';
 import { TypedEmitter } from './event-emitter';
 import {
@@ -17,9 +18,39 @@ const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
 const SELECTED_STROKE_WIDTH = 3;
 
+const DEFAULT_TRANSITION_DURATION_MS = 500;
+const FIT_BOUNDS_PADDING_PX = 80;
+const FLY_TO_PADDING_PX = 160;
+
 export interface SpatialMapEngineEvents extends Record<string, unknown> {
   hover: string | null;
   select: string[];
+}
+
+export interface TransitionOptions {
+  /** Transition length in ms. Defaults to 500. */
+  duration?: number;
+  /** Screen-space padding (px) kept clear around fitted content. */
+  padding?: number;
+}
+
+interface CameraTransition {
+  fromX: number;
+  fromY: number;
+  fromZoom: number;
+  toX: number;
+  toY: number;
+  toZoom: number;
+  elapsedMs: number;
+  durationMs: number;
+}
+
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t;
 }
 
 /**
@@ -35,7 +66,11 @@ export class SpatialMapEngine {
   /** Everything spatial (spaces, future background layers) lives in here.
    *  The camera transforms this container, not the stage. */
   private world: Container | null = null;
-  private camera: Camera | null = null;
+
+  /** Internal transform owner. The public `camera` property below is the
+   *  developer-facing API surface (flyTo/fitBounds/focus/setZoom); this is
+   *  the low-level pan/zoom math it's built on. */
+  private cameraEngine: Camera | null = null;
 
   private isPanning = false;
   private lastPointerX = 0;
@@ -49,6 +84,22 @@ export class SpatialMapEngine {
   private readonly selectedIds = new Set<string>();
 
   private readonly emitter = new TypedEmitter<SpatialMapEngineEvents>();
+
+  private transition: CameraTransition | null = null;
+  private readonly onTick = (): void => this.updateTransition();
+
+  /**
+   * Public camera API, matching the shape developers call it with:
+   * map.camera.flyTo(id), map.camera.fitBounds(ids), map.camera.focus({ids}).
+   */
+  readonly camera = {
+    flyTo: (id: string, options?: TransitionOptions) => this.flyTo(id, options),
+    fitBounds: (ids?: string[], options?: TransitionOptions) => this.fitBounds(ids, options),
+    focus: (options: { ids: string[] } & TransitionOptions) =>
+      this.fitBounds(options.ids, options),
+    setZoom: (zoom: number, options?: TransitionOptions) => this.setZoom(zoom, options),
+    getZoom: () => this.cameraEngine?.zoom ?? 1,
+  };
 
   /**
    * Boots the PixiJS application into the given host element.
@@ -74,8 +125,9 @@ export class SpatialMapEngine {
     this.world.position.set(60, 60);
     app.stage.addChild(this.world);
 
-    this.camera = new Camera(this.world);
+    this.cameraEngine = new Camera(this.world);
     this.setupInteraction(app);
+    app.ticker.add(this.onTick);
   }
 
   private setupInteraction(app: Application): void {
@@ -92,6 +144,9 @@ export class SpatialMapEngine {
   }
 
   private readonly onPointerDown = (event: FederatedPointerEvent): void => {
+    // User input always wins: drop any in-flight camera transition instead
+    // of fighting it, so there's never a tug-of-war between flyTo and drag.
+    this.transition = null;
     this.isPanning = true;
     this.lastPointerX = event.global.x;
     this.lastPointerY = event.global.y;
@@ -99,12 +154,12 @@ export class SpatialMapEngine {
   };
 
   private readonly onPointerMove = (event: FederatedPointerEvent): void => {
-    if (!this.isPanning || !this.camera) return;
+    if (!this.isPanning || !this.cameraEngine) return;
     const dx = event.global.x - this.lastPointerX;
     const dy = event.global.y - this.lastPointerY;
     this.lastPointerX = event.global.x;
     this.lastPointerY = event.global.y;
-    this.camera.pan(dx, dy);
+    this.cameraEngine.pan(dx, dy);
   };
 
   private readonly onPointerUp = (): void => {
@@ -113,8 +168,9 @@ export class SpatialMapEngine {
   };
 
   private readonly onWheel = (event: WheelEvent): void => {
-    if (!this.camera || !this.app) return;
+    if (!this.cameraEngine || !this.app) return;
     event.preventDefault();
+    this.transition = null;
 
     const rect = this.app.canvas.getBoundingClientRect();
     const screenX = event.clientX - rect.left;
@@ -123,8 +179,97 @@ export class SpatialMapEngine {
     const rawFactor = Math.exp(-event.deltaY * WHEEL_ZOOM_INTENSITY);
     const factor = Math.min(MAX_WHEEL_FACTOR, Math.max(MIN_WHEEL_FACTOR, rawFactor));
 
-    this.camera.zoomAt(screenX, screenY, factor);
+    this.cameraEngine.zoomAt(screenX, screenY, factor);
   };
+
+  private updateTransition(): void {
+    if (!this.transition || !this.cameraEngine || !this.app) return;
+
+    this.transition.elapsedMs += this.app.ticker.deltaMS;
+    const t = Math.min(1, this.transition.elapsedMs / this.transition.durationMs);
+    const eased = easeOutCubic(t);
+
+    this.cameraEngine.setTransform(
+      lerp(this.transition.fromX, this.transition.toX, eased),
+      lerp(this.transition.fromY, this.transition.toY, eased),
+      lerp(this.transition.fromZoom, this.transition.toZoom, eased),
+    );
+
+    if (t >= 1) this.transition = null;
+  }
+
+  private animateTo(toX: number, toY: number, toZoom: number, duration: number): void {
+    if (!this.cameraEngine) return;
+    const from = this.cameraEngine.getState();
+    this.transition = {
+      fromX: from.x,
+      fromY: from.y,
+      fromZoom: from.zoom,
+      toX,
+      toY,
+      toZoom: this.cameraEngine.clampZoom(toZoom),
+      elapsedMs: 0,
+      durationMs: duration,
+    };
+  }
+
+  /** Fits the given spaces' combined bounds into view. Fits all loaded spaces if `ids` is omitted. */
+  private fitBounds(ids?: string[], options?: TransitionOptions): void {
+    if (!this.app || !this.cameraEngine) return;
+
+    const spaces = (ids ?? Array.from(this.spaceData.keys()))
+      .map((id) => this.spaceData.get(id))
+      .filter((s): s is Space => !!s);
+
+    const bounds = unionBounds(spaces);
+    if (!bounds) return;
+
+    const padding = options?.padding ?? FIT_BOUNDS_PADDING_PX;
+    const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
+    const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
+    const availableWidth = Math.max(1, this.app.screen.width - padding * 2);
+    const availableHeight = Math.max(1, this.app.screen.height - padding * 2);
+
+    const targetZoom = this.cameraEngine.clampZoom(
+      Math.min(availableWidth / contentWidth, availableHeight / contentHeight),
+    );
+
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const screenCenterX = this.app.screen.width / 2;
+    const screenCenterY = this.app.screen.height / 2;
+
+    this.animateTo(
+      screenCenterX - centerX * targetZoom,
+      screenCenterY - centerY * targetZoom,
+      targetZoom,
+      options?.duration ?? DEFAULT_TRANSITION_DURATION_MS,
+    );
+  }
+
+  /** Flies to a single space. Like fitBounds, but with generous padding so one small space doesn't zoom in absurdly tight. */
+  private flyTo(id: string, options?: TransitionOptions): void {
+    this.fitBounds([id], { padding: FLY_TO_PADDING_PX, ...options });
+  }
+
+  /** Animates zoom only, keeping the point currently under screen-center fixed. */
+  private setZoom(zoom: number, options?: TransitionOptions): void {
+    if (!this.app || !this.cameraEngine) return;
+
+    const current = this.cameraEngine.getState();
+    const screenCenterX = this.app.screen.width / 2;
+    const screenCenterY = this.app.screen.height / 2;
+    const worldCenterX = (screenCenterX - current.x) / current.zoom;
+    const worldCenterY = (screenCenterY - current.y) / current.zoom;
+
+    const targetZoom = this.cameraEngine.clampZoom(zoom);
+    this.animateTo(
+      screenCenterX - worldCenterX * targetZoom,
+      screenCenterY - worldCenterY * targetZoom,
+      targetZoom,
+      options?.duration ?? DEFAULT_TRANSITION_DURATION_MS,
+    );
+  }
 
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
@@ -180,6 +325,7 @@ export class SpatialMapEngine {
     this.spaceData.clear();
     this.selectedIds.clear();
     this.hoveredId = null;
+    this.transition = null;
 
     for (const space of spaces) {
       this.spaceData.set(space.id, space);
@@ -272,6 +418,7 @@ export class SpatialMapEngine {
 
   destroy(): void {
     if (this.app) {
+      this.app.ticker.remove(this.onTick);
       this.app.stage.off('pointerdown', this.onPointerDown);
       this.app.stage.off('globalpointermove', this.onPointerMove);
       this.app.stage.off('pointerup', this.onPointerUp);
@@ -279,12 +426,13 @@ export class SpatialMapEngine {
       this.app.canvas.removeEventListener('wheel', this.onWheel);
     }
 
+    this.transition = null;
     this.spaceGraphics.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
     this.hoveredId = null;
     this.world = null;
-    this.camera = null;
+    this.cameraEngine = null;
     this.app?.destroy(true, { children: true, texture: true });
     this.app = null;
   }

@@ -49,7 +49,19 @@ export class Camera {
     this.world.position.y = screenY - worldY * this.zoomValue;
   }
 
-  private clampZoom(z: number): number {
+  /** Current transform, for computing animation start points. */
+  getState(): { x: number; y: number; zoom: number } {
+    return { x: this.world.position.x, y: this.world.position.y, zoom: this.zoomValue };
+  }
+
+  /** Applies a transform directly — used by the engine's animation driver. */
+  setTransform(x: number, y: number, zoom: number): void {
+    this.zoomValue = this.clampZoom(zoom);
+    this.world.scale.set(this.zoomValue);
+    this.world.position.set(x, y);
+  }
+
+  clampZoom(z: number): number {
     return Math.min(this.limits.maxZoom, Math.max(this.limits.minZoom, z));
   }
 }

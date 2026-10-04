@@ -31,6 +31,13 @@ import { TEST_SPACES } from './test-spaces';
           }
         </div>
       }
+      <!-- Temporary dev harness for Step 1.6 — exercises the camera API.
+           Will be replaced by real toolbar/search UI in a later step. -->
+      <div class="dev-camera-controls">
+        <button (click)="onFitAll()">Fit all</button>
+        <button (click)="onFlyToRotated()">Fly to A106</button>
+        <button (click)="onZoomIn()">Zoom 2x</button>
+      </div>
     </div>
   `,
   styles: [
@@ -61,6 +68,28 @@ import { TEST_SPACES } from './test-spaces';
         font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         pointer-events: none;
       }
+
+      .dev-camera-controls {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+      }
+
+      .dev-camera-controls button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        cursor: pointer;
+      }
+
+      .dev-camera-controls button:hover {
+        background: rgba(20, 22, 28, 0.9);
+      }
     `,
   ],
 })
@@ -89,5 +118,17 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   ngOnDestroy(): void {
     this.engine.destroy();
+  }
+
+  protected onFitAll(): void {
+    this.engine.camera.fitBounds();
+  }
+
+  protected onFlyToRotated(): void {
+    this.engine.camera.flyTo('A106');
+  }
+
+  protected onZoomIn(): void {
+    this.engine.camera.setZoom(2);
   }
 }
