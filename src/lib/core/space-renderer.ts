@@ -1674,10 +1674,12 @@ export class SpaceRenderer {
 
     if (loop.length < 2 || perimeter <= 0) return;
 
-    const dashLength = Math.max(4, Math.min(6, minSide * 0.07));
-    const gap = Math.max(3, dashLength * 0.8);
+    // Denser rope: shorter strokes and tighter spacing create a more
+    // continuous braided/perimeter motion around the selected space.
+    const dashLength = Math.max(3.4, Math.min(5.2, minSide * 0.06));
+    const gap = Math.max(1.8, dashLength * 0.42);
     const pitch = dashLength + gap;
-    const dashCount = Math.max(8, Math.ceil(perimeter / pitch));
+    const dashCount = Math.max(12, Math.ceil(perimeter / pitch));
     const travel = perimeter / dashCount;
     const slashAngle = Math.PI * 0.26;
 
@@ -1710,9 +1712,9 @@ export class SpaceRenderer {
       rope.moveTo(cx - dx, cy - dy);
       rope.lineTo(cx + dx, cy + dy);
       rope.stroke({
-        color: index % 2 === 0 ? 0x00efff : 0xe5e7eb,
-        alpha: 0.98 * strength,
-        width: 1.7,
+        color: index % 2 === 0 ? 0x00f4ff : 0xf3f4f6,
+        alpha: 1.0 * strength,
+        width: 1.9,
         cap: 'round',
       });
     }
