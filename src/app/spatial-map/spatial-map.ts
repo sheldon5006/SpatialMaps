@@ -316,17 +316,19 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           </div>
         </label>
 
-        <label class="field">
-          <span>Image</span>
-          @if (form.imageDataUrl) {
-            <div class="image-preview">
-              <img [src]="form.imageDataUrl" alt="" />
-              <button type="button" class="remove-image-btn" (click)="removeImage()">Remove</button>
-            </div>
-          } @else {
-            <input type="file" accept="image/*" (change)="onImageSelected($event)" />
-          }
-        </label>
+        @if (form.elementType === 'booth' || form.propRepresentation === 'image') {
+          <label class="field">
+            <span>Image</span>
+            @if (form.imageDataUrl) {
+              <div class="image-preview">
+                <img [src]="form.imageDataUrl" alt="" />
+                <button type="button" class="remove-image-btn" (click)="removeImage()">Remove</button>
+              </div>
+            } @else {
+              <input type="file" accept="image/*" (change)="onImageSelected($event)" />
+            }
+          </label>
+        }
 
         @if (editingId()) {
           <p class="rotate-hint">
