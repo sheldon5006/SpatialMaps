@@ -60,6 +60,21 @@ const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
   { value: 'information', label: 'Information' },
 ];
 
+const PROP_COLOR_PALETTE = [
+  { value: '#64748b', label: 'Slate' },
+  { value: '#ef4444', label: 'Red' },
+  { value: '#f97316', label: 'Orange' },
+  { value: '#eab308', label: 'Yellow' },
+  { value: '#22c55e', label: 'Green' },
+  { value: '#14b8a6', label: 'Teal' },
+  { value: '#06b6d4', label: 'Cyan' },
+  { value: '#3b82f6', label: 'Blue' },
+  { value: '#8b5cf6', label: 'Purple' },
+  { value: '#ec4899', label: 'Pink' },
+  { value: '#a16207', label: 'Earth' },
+  { value: '#f5f5f4', label: 'Light' },
+];
+
 function defaultShapeForElement(type: SpaceElementType): SpaceGeometry['type'] {
   return type === 'prop' ? 'circle' : 'rectangle';
 }
@@ -110,6 +125,7 @@ interface SpaceFormState {
   width: number;
   height: number;
   imageDataUrl: string | null;
+  propColor: string;
 }
 
 function defaultFormState(): SpaceFormState {
@@ -122,6 +138,7 @@ function defaultFormState(): SpaceFormState {
     width: 80,
     height: 60,
     imageDataUrl: null,
+    propColor: '#64748b',
   };
 }
 
@@ -236,6 +253,33 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
                   <option [ngValue]="option.value">{{ option.label }}</option>
                 }
               </select>
+            </label>
+          }
+
+          @if (form.elementType === 'prop') {
+            <label class="field">
+              <span>Prop color</span>
+              <div class="prop-color-palette" role="group" aria-label="Prop color">
+                @for (color of propColorPalette; track color.value) {
+                  <button
+                    type="button"
+                    class="prop-color-swatch"
+                    [class.active]="form.propColor === color.value"
+                    [style.background]="color.value"
+                    [attr.aria-label]="color.label"
+                    [attr.aria-pressed]="form.propColor === color.value"
+                    (click)="setPropColor(color.value)"
+                  ></button>
+                }
+                <label class="custom-color">
+                  <span>Custom</span>
+                  <input
+                    type="color"
+                    [(ngModel)]="form.propColor"
+                    aria-label="Custom prop color"
+                  />
+                </label>
+              </div>
             </label>
           }
 
@@ -582,6 +626,46 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         color: #fff;
       }
 
+      .prop-color-palette {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        align-items: center;
+      }
+
+      .prop-color-swatch {
+        width: 28px;
+        height: 28px;
+        padding: 0;
+        border-radius: 50%;
+        border: 2px solid rgba(255, 255, 255, 0.16);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.18);
+      }
+
+      .prop-color-swatch.active {
+        border-color: #ffffff;
+        box-shadow: 0 0 0 2px #3a7afe;
+      }
+
+      .custom-color {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 2px;
+        font-size: 11px;
+        color: #9a9fab;
+      }
+
+      .custom-color input {
+        width: 30px;
+        height: 30px;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        border-radius: 7px;
+        background: transparent;
+        overflow: hidden;
+      }
+
       .shape-picker {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -818,6 +902,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
   protected readonly propOptions = PROP_OPTIONS;
+  protected readonly propColorPalette = PROP_COLOR_PALETTE;
   protected form: SpaceFormState = defaultFormState();
 
   private readonly engine = new SpatialMapEngine();
@@ -923,6 +1008,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       status: space.properties.status ?? 'available',
       elementType: space.type === 'prop' || space.type === 'infrastructure' ? 'prop' : 'booth',
       propKind: space.properties.propKind ?? null,
+      propColor: space.properties.propColor ?? '#64748b',
       shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
@@ -958,6 +1044,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
     if (elementType === 'prop') {
       this.form.name = '';
+      if (!this.form.propColor) this.form.propColor = '#64748b';
     }
 
     if (this.form.shape === 'circle') {
@@ -973,6 +1060,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected onPropKindChange(kind: SpacePropKind | null): void {
     this.form.propKind = kind;
+  }
+
+  protected setPropColor(color: string): void {
+    this.form.propColor = color;
   }
 
   protected setShape(shape: SpaceGeometry['type']): void {
@@ -1017,7 +1108,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, elementType, propKind, shape, width, height, imageDataUrl } = this.form;
+    const { name, status, elementType, propKind, propColor, shape, width, height, imageDataUrl } = this.form;
     const w = Math.max(4, Number(width) || 80);
     const h = shape === 'circle' ? w : Math.max(4, Number(height) || 60);
     const savedType: SpaceElementType = elementType;
@@ -1033,6 +1124,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
           name: savedType === 'booth' ? (name || id) : undefined,
           status,
           propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
+          propColor: savedType === 'booth' ? undefined : propColor,
           imageUrl: savedType === 'booth' && shape === 'rectangle'
             ? (imageDataUrl ?? undefined)
             : undefined,
@@ -1053,6 +1145,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
         name: savedType === 'booth' ? (name || id) : undefined,
         status,
         propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
+        propColor: savedType === 'booth' ? undefined : propColor,
         imageUrl: savedType === 'booth' && shape === 'rectangle'
           ? (imageDataUrl ?? undefined)
           : undefined,
