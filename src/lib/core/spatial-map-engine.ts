@@ -53,7 +53,10 @@ export class SpatialMapEngine {
   private theme: MapTheme = 'dark';
   private cameraLimits = { minZoom: 0.45, maxZoom: 3.5 };
 
-  private readonly onTick = (): void => this.transitions?.tick();
+  private readonly onTick = (): void => {
+    this.transitions?.tick();
+    this.renderer?.setCameraZoom(this.transitions?.getZoom() ?? 1);
+  };
 
   /**
    * Public camera API, matching the shape developers call it with:
