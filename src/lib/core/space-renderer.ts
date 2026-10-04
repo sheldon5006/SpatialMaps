@@ -376,6 +376,7 @@ export class SpaceRenderer {
     const entry = this.createSpaceNode(space);
     this.spaceNodes.set(space.id, entry);
     this.world.addChild(entry.node);
+    this.drawGrid();
     this.updateFocusEffect(); // a newly added space should be dimmed too if a focus is active
     this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
@@ -407,6 +408,7 @@ export class SpaceRenderer {
     this.paintSpace(entry, merged);
     this.applyGeometry(entry, merged.geometry);
     this.updateCursor(id, merged);
+    this.drawGrid();
 
     // A status/data change can make a previously selected space invalid
     // (e.g. a backend update marks it sold) — the UI must never keep
@@ -436,6 +438,7 @@ export class SpaceRenderer {
     entry.node.destroy({ children: true });
     this.spaceNodes.delete(id);
     this.spaceData.delete(id);
+    this.drawGrid();
 
     if (this.hoveredId === id) {
       this.hoveredId = null;
@@ -522,7 +525,8 @@ export class SpaceRenderer {
   sendToBack(id: string): void {
     const entry = this.spaceNodes.get(id);
     if (!entry) return;
-    this.world.setChildIndex(entry.node, 0);
+    // Grid occupies world child index 0, so never place map content beneath it.
+    this.world.setChildIndex(entry.node, this.grid.parent === this.world ? 1 : 0);
     this.syncSpaceDataOrderToWorld();
   }
 
