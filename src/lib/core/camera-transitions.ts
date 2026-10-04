@@ -163,6 +163,10 @@ export class CameraTransitions {
     return this.camera.zoom;
   }
 
+  setZoomLimits(limits: { minZoom?: number; maxZoom?: number }): void {
+    this.camera.setLimits(limits);
+  }
+
   private animateTo(toX: number, toY: number, toZoom: number, duration: number): void {
     const from = this.camera.getState();
     this.transition = {
