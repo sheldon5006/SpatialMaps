@@ -1231,7 +1231,6 @@ export class SpaceRenderer {
       0.5,
       isSelected || isSearchHighlighted || isFocusHighlighted,
       isFocusHighlighted ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
-      0,
       1,
     );
     entry.searchHighlight.visible = isSelected || isSearchHighlighted || isFocusHighlighted;
