@@ -2217,15 +2217,13 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     if (matches.length === 1 || this.isSearchCluster(matches)) {
       const nearest = this.nearestSearchMatch(matches);
       this.engine.camera.flyTo(nearest.id, {
-        // Keep the result clear of the fixed search panel.
-        padding: SEARCH_PANEL_PADDING,
+        padding: MAP_VIEW_PADDING,
         maxZoom: 1.8,
         duration: 450,
       });
     } else {
       this.engine.camera.fitBounds(ids, {
-        // Multi-match fitting must reserve the search panel as well.
-        padding: SEARCH_PANEL_PADDING,
+        padding: MAP_VIEW_PADDING,
         maxZoom: 1.15,
         duration: 450,
       });
