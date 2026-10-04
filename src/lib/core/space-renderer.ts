@@ -1,5 +1,4 @@
 import {
-  BlurFilter,
   Circle,
   Container,
   FederatedPointerEvent,
@@ -49,13 +48,23 @@ const LABEL_MIN_HEIGHT = 20;
  * Matching booths stay crisp; non-matching booths get a subtle frosted-glass
  * treatment with only a small amount of blur so the map remains readable.
  */
-const FILTER_GLASS_BLUR = 1.15;
-const FILTER_GLASS_ALPHA = 0.9;
+/**
+ * Liquid-glass treatment used ONLY on booths receded by an active visual
+ * filter. This is intentionally vector-based: no blur filter, no backdrop
+ * blur, and no status mutation. The layered translucent body/rims/highlights
+ * create a light-catching "liquid" surface while the booth underneath stays
+ * recognizable.
+ */
 const FILTER_GLASS_TINT_COLOR = 0xeaf4ff;
-const FILTER_GLASS_TINT_ALPHA = 0.12;
+const FILTER_GLASS_TINT_ALPHA = 0.10;
+const FILTER_GLASS_BODY_COLOR = 0xffffff;
+const FILTER_GLASS_BODY_ALPHA = 0.045;
 const FILTER_GLASS_RIM_COLOR = 0xffffff;
-const FILTER_GLASS_RIM_ALPHA = 0.38;
-const FILTER_GLASS_SHEEN_ALPHA = 0.18;
+const FILTER_GLASS_RIM_ALPHA = 0.72;
+const FILTER_GLASS_INNER_RIM_ALPHA = 0.30;
+const FILTER_GLASS_DARK_RIM_COLOR = 0x8ea5bf;
+const FILTER_GLASS_DARK_RIM_ALPHA = 0.22;
+const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
@@ -123,7 +132,7 @@ interface SpaceNode {
   shape: Graphics;
   handle: Graphics;
   label: Text;
-  /** The "glass pane" drawn over a space when it's receded behind focus. */
+  /** Liquid-glass overlay drawn over a space when an active filter recedes it. */
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
@@ -172,14 +181,12 @@ export class SpaceRenderer {
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
-  /** Shared filter instance — only used when an explicit visual filter
-   *  recedes a booth. Selection alone never applies this filter. */
-  private readonly focusBlurFilter = new BlurFilter({
-    strength: FILTER_GLASS_BLUR,
-    quality: 4,
-  });
-
-  private readonly focusFilters = [this.focusBlurFilter];
+  /**
+   * Filter receding is now a visual overlay only. There is deliberately no
+   * Pixi BlurFilter here: the liquid-glass appearance comes from the glass
+   * Graphics layers drawn per booth.
+   */
+  private readonly focusFilters: never[] = [];
 
   constructor(
     private readonly world: Container,
@@ -435,25 +442,22 @@ export class SpaceRenderer {
   }
 
   /**
-   * Recedes spaces that don't match the current visual filter behind a
-   * glass pane with a little blur. Selection itself never drives this.
+   * Recedes spaces that don't match the current visual filter under a
+   * liquid-glass overlay. Selection itself never drives this.
+   *
+   * "All" means every booth remains completely crisp. An explicit status
+   * filter or "selected" filter controls which booths receive the overlay.
    */
   private updateFocusEffect(): void {
     this.spaceNodes.forEach((entry, id) => {
       const isSelected = this.selectedIds.has(id);
       const recede = this.shouldRecede(id);
 
-      if (recede) {
-        entry.node.filters = this.focusFilters;
-        entry.node.alpha = FILTER_GLASS_ALPHA;
-        entry.node.scale.set(1);
-        entry.glass.visible = true;
-      } else {
-        entry.node.filters = [];
-        entry.node.alpha = 1;
-        entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
-        entry.glass.visible = false;
-      }
+      // No blur/backdrop filter: the glass is purely the drawn overlay.
+      entry.node.filters = this.focusFilters;
+      entry.node.alpha = 1;
+      entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
+      entry.glass.visible = recede;
     });
   }
 
@@ -653,7 +657,7 @@ export class SpaceRenderer {
 
     this.updateImage(entry, space);
     this.updateLabel(entry, space);
-    this.drawGlass(entry.glass, geometry); // size only — visibility is set by updateFocusEffect()
+    this.drawGlass(entry.glass, geometry); // visibility is set by updateFocusEffect()
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
@@ -682,22 +686,66 @@ export class SpaceRenderer {
     entry.label.position.set(width / 2, height / 2);
   }
 
-  /** Draws a subtle frosted-glass overlay for booths receded by an active filter. */
+  /** Draws a liquid-glass surface over booths receded by an active filter. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
+
     glass.clear();
 
-    glass
-      .rect(0, 0, width, height)
-      .fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA })
-      .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1, alpha: FILTER_GLASS_RIM_ALPHA });
+    if (width <= 2 || height <= 2) return;
 
-    // A minimal top sheen creates the glass cue without obscuring booth labels.
-    if (width > 4 && height > 4) {
+    // The radius scales with the booth but stays conservative so the
+    // overlay still respects small/compact booth geometry.
+    const radius = Math.min(12, Math.max(4, Math.min(width, height) * 0.12));
+    const inset = 1.5;
+
+    // 1) Translucent liquid body — keeps the original booth/status visible.
+    glass
+      .roundRect(0, 0, width, height, radius)
+      .fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA });
+
+    glass
+      .roundRect(inset, inset, width - inset * 2, height - inset * 2, Math.max(2, radius - 1))
+      .fill({ color: FILTER_GLASS_BODY_COLOR, alpha: FILTER_GLASS_BODY_ALPHA });
+
+    // 2) Bright outer rim — the main "light catching" glass cue.
+    glass
+      .roundRect(0.5, 0.5, width - 1, height - 1, radius)
+      .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1.6, alpha: FILTER_GLASS_RIM_ALPHA });
+
+    // 3) Soft inner rim adds lens/depth separation without blur.
+    glass
+      .roundRect(3, 3, Math.max(0, width - 6), Math.max(0, height - 6), Math.max(2, radius - 3))
+      .stroke({
+        color: FILTER_GLASS_RIM_COLOR,
+        width: 1,
+        alpha: FILTER_GLASS_INNER_RIM_ALPHA,
+      });
+
+    // 4) Darker lower/right edge gives the surface a dimensional boundary.
+    glass
+      .moveTo(radius, height - 1)
+      .lineTo(width - radius, height - 1)
+      .moveTo(width - 1, radius)
+      .lineTo(width - 1, height - radius)
+      .stroke({
+        color: FILTER_GLASS_DARK_RIM_COLOR,
+        width: 1.25,
+        alpha: FILTER_GLASS_DARK_RIM_ALPHA,
+      });
+
+    // 5) Specular highlight along the upper-left edge, inspired by liquid
+    // glass / lens reflections. Keep it short so booth names remain clear.
+    const shineLength = Math.min(width * 0.42, 110);
+    if (shineLength > 8) {
       glass
-        .moveTo(2, 2)
-        .lineTo(width - 2, 2)
-        .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1, alpha: FILTER_GLASS_SHEEN_ALPHA });
+        .moveTo(radius * 0.55, 1.5)
+        .lineTo(Math.min(width - radius, radius * 0.55 + shineLength), 1.5)
+        .stroke({
+          color: FILTER_GLASS_RIM_COLOR,
+          width: 1.4,
+          alpha: FILTER_GLASS_SPECULAR_ALPHA,
+        });
     }
   }
 
