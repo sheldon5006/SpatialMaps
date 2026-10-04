@@ -1950,6 +1950,11 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.engine.camera.setZoom(zoom);
   }
 
+  setSearchHighlight(id: string | null): void {
+    this.searchHighlightedId.set(id);
+    this.engine.setSearchHighlight(id);
+  }
+
   getZoom(): number {
     return this.engine.camera.getZoom();
   }
@@ -2055,6 +2060,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
   protected setSearchEnabled(enabled: boolean): void {
     this.searchEnabled.set(enabled);
+    if (!enabled) this.setSearchHighlight(null);
     this.setMapSettings({
       search: { enabled },
     });
@@ -2077,8 +2083,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
-    this.searchHighlightedId.set(id);
-    this.engine.setSearchHighlight(id);
+    this.setSearchHighlight(id);
 
     // Keep the target booth in the visible map area rather than centering it
     // underneath the persistent search panel.
