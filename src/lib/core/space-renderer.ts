@@ -1106,7 +1106,9 @@ export class SpaceRenderer {
     const { width, height } = space.geometry;
     const name = space.properties.name;
 
-    if (!name || width < LABEL_MIN_WIDTH || height < LABEL_MIN_HEIGHT) {
+    // Props are map context/symbols and intentionally have no booth-style
+    // labels. Their identity comes from propKind and visual shape.
+    if (space.type !== 'booth' || !name || width < LABEL_MIN_WIDTH || height < LABEL_MIN_HEIGHT) {
       entry.label.visible = false;
       return;
     }
