@@ -42,18 +42,20 @@ const LABEL_MIN_WIDTH = 28;
 const LABEL_MIN_HEIGHT = 20;
 
 /**
- * Filter recede: frost the booth content slightly, then sit a sharp glass
- * pane on top (sheen + rim). Blur must not include the pane itself, or the
- * overlay smears and reads as a dim instead of glass.
+ * Filter-only recede effect.
+ *
+ * IMPORTANT: selecting a booth does NOT trigger this effect. The effect is
+ * driven exclusively by an explicit visual filter (status or "selected").
+ * Matching booths stay crisp; non-matching booths get a subtle frosted-glass
+ * treatment with only a small amount of blur so the map remains readable.
  */
-const CONTENT_FROST_BLUR = 1.15;
-const GLASS_PANE_COLOR = 0xeef6ff;
-const GLASS_PANE_ALPHA = 0.4;
-const GLASS_SHEEN_COLOR = 0xffffff;
-const GLASS_SHEEN_ALPHA = 0.3;
-const GLASS_HIGHLIGHT_ALPHA = 0.55;
-const GLASS_RIM_COLOR = 0xffffff;
-const GLASS_RIM_ALPHA = 0.78;
+const FILTER_GLASS_BLUR = 1.15;
+const FILTER_GLASS_ALPHA = 0.9;
+const FILTER_GLASS_TINT_COLOR = 0xeaf4ff;
+const FILTER_GLASS_TINT_ALPHA = 0.12;
+const FILTER_GLASS_RIM_COLOR = 0xffffff;
+const FILTER_GLASS_RIM_ALPHA = 0.38;
+const FILTER_GLASS_SHEEN_ALPHA = 0.18;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
@@ -170,25 +172,20 @@ export class SpaceRenderer {
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
-  /** Shared instances — applying the same filter to multiple display
-   *  objects is fine in Pixi and avoids allocating GPU filters per space.
-   *  Low strength + a fixed 4px padding keeps the blur's render bounds
-   *  from bleeding into a tightly adjacent neighbor (see FOCUS_BLUR_STRENGTH). */
+  /** Shared filter instance — only used when an explicit visual filter
+   *  recedes a booth. Selection alone never applies this filter. */
   private readonly focusBlurFilter = new BlurFilter({
-    strength: FOCUS_BLUR_STRENGTH,
+    strength: FILTER_GLASS_BLUR,
     quality: 4,
   });
-  private readonly focusDesaturateFilter = new ColorMatrixFilter();
 
-  private readonly focusFilters = [this.focusBlurFilter, this.focusDesaturateFilter];
+  private readonly focusFilters = [this.focusBlurFilter];
 
   constructor(
     private readonly world: Container,
     private readonly stage: Container,
     private readonly getCamera: () => CameraSnapshot,
   ) {
-    this.focusDesaturateFilter.saturate(FOCUS_DESATURATION, false);
-
     // Drag continuation: like PointerInteraction's panning, these use the
     // "global" variants so a move/rotate keeps tracking the pointer even
     // once it moves outside the dragged shape's own bounds.
