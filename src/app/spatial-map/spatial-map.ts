@@ -122,6 +122,7 @@ function defaultFormState(): SpaceFormState {
  *  the toolbar no longer overlaps the canvas at all (it's a real header
  *  now) — so only the drawer needs accounting for here. */
 const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
+const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
@@ -247,6 +248,11 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
               <div class="search-summary">Browse all bookable spaces</div>
             }
 
+            <div class="search-table-head" aria-hidden="true">
+              <span>BOOTH</span>
+              <span>NAME</span>
+              <span>STATUS</span>
+            </div>
             <div class="search-results" role="list">
               @for (space of searchResults(); track space.id) {
                 <button
@@ -877,6 +883,17 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         padding: 0 16px 10px;
         color: #707987;
         font-size: 11px;
+      }
+
+      .search-table-head {
+        display: grid;
+        grid-template-columns: 58px 1fr auto;
+        gap: 10px;
+        padding: 0 17px 7px;
+        color: #606876;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
       }
 
       .search-results {
@@ -1681,7 +1698,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       // Start from a complete map view instead of the engine's 60px/60px
       // world offset. Fit is allowed to go below the interactive readable
       // minimum so the whole venue remains visible.
-      this.engine.camera.fitBounds(undefined, { duration: 0 });
+      this.engine.camera.fitBounds(undefined, {
+        duration: 0,
+        padding: SEARCH_PANEL_PADDING,
+      });
       // The overview is a browsing start point, not a tiny architectural
       // thumbnail. Center first, then move to the configured readable base.
       this.engine.camera.setZoom(this.viewBaseZoom, { duration: 0 });
@@ -2012,7 +2032,13 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
-    this.engine.camera.flyTo(id, { duration: 450 });
+    // Keep the target booth in the visible map area rather than centering it
+    // underneath the persistent search panel.
+    this.engine.camera.fitBounds([id], {
+      padding: SEARCH_PANEL_PADDING,
+      maxZoom: 1.8,
+      duration: 450,
+    });
   }
 
   /** Programmatic search helper for surrounding Angular code. */
