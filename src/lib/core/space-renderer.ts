@@ -284,6 +284,7 @@ export class SpaceRenderer {
 
   setTheme(theme: MapTheme): void {
     this.theme = theme;
+    this.spaceData.forEach((space, id) => this.repaint(id));
     this.drawGrid();
   }
 
@@ -618,7 +619,7 @@ export class SpaceRenderer {
       this.grid.stroke({ color: major ? majorColor : lineColor, width: major ? 1.15 : 0.7, alpha: major ? majorAlpha : lineAlpha });
     }
 
-    this.grid.zIndex = -1000;
+    this.grid.zIndex = -500;
     this.updateGridVisibility();
   }
 
@@ -721,8 +722,14 @@ export class SpaceRenderer {
       checkBadge,
     };
 
-    node.eventMode = 'static';
+    const isEditorBackground = space.id === 'ground';
+    node.eventMode = isEditorBackground ? 'none' : 'static';
+    shape.eventMode = isEditorBackground ? 'none' : 'static';
     node.label = space.id;
+    // The ground belongs behind the editor grid, while all real map
+    // elements stay above the grid. This gives the grid a useful drafting
+    // surface without turning the background into an editable target.
+    if (isEditorBackground) node.zIndex = -1000;
 
     node.on('pointerover', () => this.setHover(space.id));
     node.on('pointerout', () => this.setHover(null));
@@ -967,10 +974,13 @@ export class SpaceRenderer {
 
     if (space.type === 'prop') {
       if (!hasImage) {
+        const isGround = space.id === 'ground';
         this.drawPropShape(
           entry.shape,
           geometry,
-          this.parsePropColor(space.properties.propColor),
+          isGround
+            ? (this.theme === 'dark' ? 0x20252b : 0xf3f0e8)
+            : this.parsePropColor(space.properties.propColor),
         );
       }
     } else if (space.type === 'textbox') {
