@@ -61,6 +61,14 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
         <button (click)="onMoveA101()">Move A101</button>
         <button (click)="onRemoveA105()">Remove A105</button>
       </div>
+      <!-- Dev harness for Step 1.10 — export/import round trip. Export
+           downloads the current data as JSON (a real file, for a real dev
+           workflow); "Import last export" re-loads that same payload from
+           memory, useful for quick verification without a file picker. -->
+      <div class="dev-io-controls">
+        <button (click)="onExport()">Export JSON</button>
+        <button (click)="onImportLastExport()" [disabled]="!lastExportJson">Import last export</button>
+      </div>
     </div>
   `,
   styles: [
@@ -167,6 +175,33 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
       .dev-data-controls button:hover {
         background: rgba(20, 22, 28, 0.9);
       }
+
+      .dev-io-controls {
+        position: absolute;
+        top: 84px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+      }
+
+      .dev-io-controls button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        cursor: pointer;
+      }
+
+      .dev-io-controls button:hover:not(:disabled) {
+        background: rgba(20, 22, 28, 0.9);
+      }
+
+      .dev-io-controls button:disabled {
+        opacity: 0.4;
+        cursor: default;
+      }
     `,
   ],
 })
@@ -255,5 +290,27 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected onRemoveA105(): void {
     this.engine.removeSpace('A105');
+  }
+
+  protected lastExportJson: string | null = null;
+
+  protected onExport(): void {
+    const data = this.engine.exportData();
+    this.lastExportJson = JSON.stringify(data, null, 2);
+
+    // Real dev workflow: download the current map layout as a .json file.
+    const blob = new Blob([this.lastExportJson], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'spatial-map-export.json';
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  protected onImportLastExport(): void {
+    if (!this.lastExportJson) return;
+    this.engine.importData(JSON.parse(this.lastExportJson));
+    this.engine.camera.fitBounds(undefined, { duration: 0 });
   }
 }

@@ -39,6 +39,17 @@ export interface Space {
   properties: SpaceProperties;
 }
 
+export const SPATIAL_MAP_EXPORT_VERSION = 1 as const;
+
+/**
+ * The serialization envelope used by engine.exportData()/importData().
+ * Versioned so the format can evolve without breaking old exports.
+ */
+export interface SpatialMapExport {
+  version: typeof SPATIAL_MAP_EXPORT_VERSION;
+  spaces: Space[];
+}
+
 export interface StatusStyle {
   fill: number;
   fillAlpha?: number;
