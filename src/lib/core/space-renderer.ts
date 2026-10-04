@@ -72,16 +72,12 @@ const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
 /** Very light content blur used only on booths receded by an active filter. */
 const FILTER_CONTENT_BLUR = 0.9;
 
-/** Selection gets a slight lift — a small scale-up reads as "raised toward
- *  you", reinforcing the highlight beyond just the outline color. */
+/** Selected booths settle a fraction inward, like a pressed modern control. */
 const SELECTED_SCALE = 0.985;
 
 // Modern pressed-button locator palette: blue face + deep navy cast shadow.
-const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x3b82f6;
 const SEARCH_HIGHLIGHT_DARK_COLOR = 0x071426;
 const SEARCH_HIGHLIGHT_CORE_COLOR = 0xeff6ff;
-const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.30;
-const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.96;
 const SEARCH_HIGHLIGHT_BLUR = 4;
 
 const HIGHLIGHT_PRESS_SPEED = 0.00115;
