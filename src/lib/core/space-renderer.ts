@@ -189,9 +189,6 @@ export class SpaceRenderer {
   private focusedId: string | null = null;
   private searchHighlightedId: string | null = null;
   private focusHighlightedId: string | null = null;
-  /** After the temporary fly-to color expires, the primary rope keeps running
-   *  as a persistent locator until another focus/search action replaces it. */
-  private postFocusHighlightedId: string | null = null;
   private focusHighlightUntil = 0;
   private focusHighlightStartedAt = 0;
   private focusHighlightColor = DEFAULT_FOCUS_HIGHLIGHT_COLOR;
@@ -365,7 +362,6 @@ export class SpaceRenderer {
     if (this.searchHighlightedId === id) return;
     const previous = this.searchHighlightedId;
     this.searchHighlightedId = id;
-    if (id !== previous) this.postFocusHighlightedId = null;
 
     if (previous) {
       this.startPressTransition(previous, this.selectedIds.has(previous) || this.focusHighlightedId === previous);
@@ -386,7 +382,6 @@ export class SpaceRenderer {
     options?: { durationMs?: number; color?: string },
   ): void {
     const durationMs = Math.max(0, options?.durationMs ?? 2000);
-    this.postFocusHighlightedId = null;
     this.focusHighlightedId = id;
     this.focusHighlightStartedAt = performance.now();
     this.focusHighlightUntil = performance.now() + durationMs;
@@ -410,18 +405,16 @@ export class SpaceRenderer {
     if (this.focusHighlightedId !== null && !focusWasActive) {
       const expired = this.focusHighlightedId;
       this.focusHighlightedId = null;
-      this.postFocusHighlightedId = expired;
       this.focusHighlightUntil = 0;
       this.focusHighlightStartedAt = 0;
-
-      // The temporary orange/blue phase ends here. Keep the locator alive and
-      // hand it back to the normal navy/grey rope instead of removing it.
+      // The fly-to locator ends with its timer. A selected/search-highlighted
+      // space remains active only if that independent state still exists.
+      this.startPressTransition(expired, this.selectedIds.has(expired) || this.searchHighlightedId === expired);
     }
 
     const activeIds = new Set<string>();
     if (this.searchHighlightedId) activeIds.add(this.searchHighlightedId);
     if (this.focusHighlightedId && focusWasActive) activeIds.add(this.focusHighlightedId);
-    if (this.postFocusHighlightedId) activeIds.add(this.postFocusHighlightedId);
     this.selectedIds.forEach((id) => activeIds.add(id));
 
     if (activeIds.size === 0 && this.pressAnimations.size === 0) return;
@@ -461,9 +454,9 @@ export class SpaceRenderer {
 
       const isSearch = this.searchHighlightedId === id;
       const isFocus = this.focusHighlightedId === id && focusWasActive;
-      const isPostFocus = this.postFocusHighlightedId === id;
+      const isPostFocus = false;
       const isSelected = this.selectedIds.has(id);
-      const visible = isSelected || isSearch || isFocus || isPostFocus;
+      const visible = isSelected || isSearch || isFocus;
 
       // Fly-to rope remains fully visible for its complete configured duration;
       // the timer ends the focus state rather than fading the rope early.
@@ -540,7 +533,6 @@ export class SpaceRenderer {
     this.spaceData.clear();
     this.selectedIds.clear();
     this.pressAnimations.clear();
-    this.postFocusHighlightedId = null;
     this.hoveredId = null;
 
     this.world.addChild(this.grid);
@@ -1314,10 +1306,9 @@ export class SpaceRenderer {
     const isSearchHighlighted = this.searchHighlightedId === space.id;
     const isFocusHighlighted = this.focusHighlightedId === space.id &&
       performance.now() < this.focusHighlightUntil;
-    const isPostFocusHighlighted = this.postFocusHighlightedId === space.id;
     const isSelected = this.selectedIds.has(space.id);
     const initiallyVisible =
-      isSelected || isSearchHighlighted || isFocusHighlighted || isPostFocusHighlighted;
+      isSelected || isSearchHighlighted || isFocusHighlighted;
     const initialPress = this.pressAnimations.get(space.id)?.progress ??
       (initiallyVisible ? 1 : 0);
 
