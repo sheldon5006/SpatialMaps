@@ -42,6 +42,7 @@ const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string;
 const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = [
   { value: 'booth', label: 'Booth' },
   { value: 'prop', label: 'Prop' },
+  { value: 'textbox', label: 'Text Box' },
 ];
 
 const PROP_COLOR_PALETTE = [
@@ -102,6 +103,7 @@ interface SpaceFormState {
   imageDataUrl: string | null;
   propColor: string;
   propRepresentation: 'shape' | 'image';
+  textVisible: boolean;
 }
 
 function defaultFormState(): SpaceFormState {
@@ -115,6 +117,7 @@ function defaultFormState(): SpaceFormState {
     imageDataUrl: null,
     propColor: '#64748b',
     propRepresentation: 'shape',
+    textVisible: false,
   };
 }
 
@@ -201,7 +204,13 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <input
             type="text"
             [(ngModel)]="form.name"
-            [placeholder]="form.elementType === 'booth' ? 'e.g. Booth A101' : 'e.g. Tree / Main Entrance'"
+            [placeholder]="
+              form.elementType === 'booth'
+                ? 'e.g. Booth A101'
+                : form.elementType === 'textbox'
+                  ? 'e.g. GENERAL STORE'
+                  : 'e.g. Tree / Main Entrance'
+            "
           />
         </label>
 
@@ -240,6 +249,14 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
                   (click)="setPropRepresentation('image')"
                 >Image</button>
               </div>
+            </label>
+
+            <label class="field toggle-field">
+              <span>Text</span>
+              <label class="toggle-option">
+                <input type="checkbox" [(ngModel)]="form.textVisible" />
+                <span>Show prop name on map</span>
+              </label>
             </label>
 
             @if (form.propRepresentation === 'shape') {
@@ -282,9 +299,30 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
                 </div>
               </label>
             }
-          } @else {
+          } @else if (form.elementType === 'booth') {
             <label class="field">
               <span>Vector shape</span>
+              <div class="shape-picker" role="group" aria-label="Vector shape">
+                @for (shape of vectorShapeOptions; track shape.value) {
+                  <button
+                    type="button"
+                    class="shape-option"
+                    [class.active]="form.shape === shape.value"
+                    [attr.aria-pressed]="form.shape === shape.value"
+                    (click)="setShape(shape.value)"
+                  >
+                    <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                    <span>{{ shape.label }}</span>
+                  </button>
+                }
+              </div>
+            </label>
+          } @else {
+            <p class="rotate-hint">
+              Uses the Name field as the text displayed on the map.
+            </p>
+          }
+
               <div class="shape-picker" role="group" aria-label="Vector shape">
                 @for (shape of vectorShapeOptions; track shape.value) {
                   <button
@@ -303,14 +341,16 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           }
         }
         
-        <label class="field">
-          <span>Status</span>
-          <select [(ngModel)]="form.status">
-            @for (status of statusOptions; track status) {
-              <option [value]="status">{{ status }}</option>
-            }
-          </select>
-        </label>
+        @if (form.elementType !== 'textbox') {
+          <label class="field">
+            <span>Status</span>
+            <select [(ngModel)]="form.status">
+              @for (status of statusOptions; track status) {
+                <option [value]="status">{{ status }}</option>
+              }
+            </select>
+          </label>
+        }
 
         <label class="field">
           <span>Size</span>
@@ -333,7 +373,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           </div>
         </label>
 
-        @if (form.elementType === 'booth' || form.propRepresentation === 'image') {
+        @if (form.elementType === 'booth' || (form.elementType === 'prop' && form.propRepresentation === 'image')) {
           <label class="field">
             <span>Image</span>
             @if (form.imageDataUrl) {
@@ -1011,6 +1051,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       elementType: space.type === 'prop' ? 'prop' : 'booth',
       propColor: space.properties.propColor ?? '#64748b',
       propRepresentation: space.properties.imageUrl ? 'image' : 'shape',
+      textVisible: space.properties.textVisible === true,
       shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
@@ -1041,8 +1082,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setElementType(elementType: SpaceElementType): void {
     this.form.elementType = elementType;
-    if (elementType === 'booth') {
+    if (elementType === 'booth' || elementType === 'textbox') {
       this.form.propRepresentation = 'shape';
+      this.form.imageDataUrl = null;
+    }
+    if (elementType === 'textbox') {
+      this.form.shape = 'rectangle';
     }
   }
 
@@ -1105,10 +1150,11 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, elementType, propColor, propRepresentation, shape, width, height, imageDataUrl } = this.form;
-    const w = Math.max(4, Number(width) || 80);
-    const h = shape === 'circle' ? w : Math.max(4, Number(height) || 60);
+    const { name, status, elementType, propColor, propRepresentation, textVisible, shape, width, height, imageDataUrl } = this.form;
     const savedType: SpaceElementType = elementType;
+    const savedShape: SpaceGeometry['type'] = savedType === 'textbox' ? 'rectangle' : shape;
+    const w = Math.max(4, Number(width) || 80);
+    const h = savedShape === 'circle' ? w : Math.max(4, Number(height) || 60);
 
     if (this.isAdding()) {
       const id = `space-${Date.now()}`;
@@ -1116,12 +1162,13 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       const newSpace: Space = {
         id,
         type: savedType,
-        geometry: { type: shape, ...position, width: w, height: h },
+        geometry: { type: savedShape, ...position, width: w, height: h },
         properties: {
           name: name || id,
           status,
           propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
-          imageUrl: (savedType === 'booth' && shape === 'rectangle') ||
+          textVisible: savedType === 'prop' ? textVisible : undefined,
+          imageUrl: (savedType === 'booth' && savedShape === 'rectangle') ||
             (savedType === 'prop' && propRepresentation === 'image')
             ? (imageDataUrl ?? undefined)
             : undefined,
@@ -1137,12 +1184,13 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     if (!id) return;
     this.engine.updateSpace(id, {
       type: savedType,
-      geometry: { type: shape, width: w, height: h },
+      geometry: { type: savedShape, width: w, height: h },
       properties: {
         name: name || id,
         status,
         propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
-        imageUrl: (savedType === 'booth' && shape === 'rectangle') ||
+        textVisible: savedType === 'prop' ? textVisible : undefined,
+        imageUrl: (savedType === 'booth' && savedShape === 'rectangle') ||
           (savedType === 'prop' && propRepresentation === 'image')
           ? (imageDataUrl ?? undefined)
           : undefined,
