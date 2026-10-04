@@ -3,14 +3,25 @@ import {
   AfterViewInit,
   Component,
   computed,
+  EventEmitter,
+  Input,
+  Output,
   ElementRef,
   NgZone,
+  OnChanges,
   OnDestroy,
+  SimpleChanges,
   ViewChild,
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
+import {
+  DEFAULT_MAP_STATUS_DEFINITIONS,
+  DEFAULT_SPATIAL_MAP_SETTINGS,
+  SpatialMapSettings,
+  SpatialMapSettingsPatch,
+} from '../../lib/core/spatial-map-settings';
 import {
   Space,
   SpaceElementType,
@@ -24,13 +35,8 @@ import { TEST_SPACES } from './test-spaces';
 
 const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
 
-const DEFAULT_STATUS_DEFINITIONS: MapStatusDefinition[] = [
-  { key: 'available', label: 'Available', color: '#2ecc71' },
-  { key: 'reserved', label: 'Reserved', color: '#f1c40f' },
-  { key: 'booked', label: 'Booked', color: '#e67e22' },
-  { key: 'unavailable', label: 'Unavailable', color: '#7f8c8d' },
-  { key: 'maintenance', label: 'Maintenance', color: '#9b59b6' },
-];
+const DEFAULT_STATUS_DEFINITIONS: MapStatusDefinition[] =
+  DEFAULT_MAP_STATUS_DEFINITIONS.map((status) => ({ ...status }));
 
 const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string; icon: string }> = [
   { value: 'rectangle', label: 'Rectangle', icon: '▭' },
@@ -131,6 +137,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
  */
 @Component({
   selector: 'app-spatial-map',
+  exportAs: 'spatialMap',
   imports: [DecimalPipe, FormsModule],
   template: `
     <div class="spatial-map-root">
@@ -1327,9 +1334,25 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
     `,
   ],
 })
-export class SpatialMap implements AfterViewInit, OnDestroy {
+export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
+  /** Optional application-controlled data source. Omit to keep the existing demo fixture. */
+  @Input() spaces: Space[] | null = null;
+  /** Optional application-controlled runtime settings. */
+  @Input() settings: SpatialMapSettingsPatch | null = null;
+  /** Optional application-controlled status definitions. */
+  @Input() statuses: MapStatusDefinition[] | null = null;
+
+  @Output() readonly selectionChange = new EventEmitter<string[]>();
+  @Output() readonly hoverChange = new EventEmitter<string | null>();
+  @Output() readonly modeChange = new EventEmitter<MapMode>();
+  @Output() readonly filterChange = new EventEmitter<'all' | SpaceStatus | 'selected'>();
+  @Output() readonly spaceTransform = new EventEmitter<{ id: string; geometry: Space['geometry'] }>();
+  @Output() readonly spacesChange = new EventEmitter<Space[]>();
+  @Output() readonly ready = new EventEmitter<void>();
+
   @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
   @ViewChild('fpsReadout', { static: true }) fpsReadoutRef!: ElementRef<HTMLSpanElement>;
+  private engineReady = false;
 
   protected readonly hoveredId = signal<string | null>(null);
   protected readonly hoverPreview = signal<{ name: string; status: string } | null>(null);
@@ -1383,12 +1406,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.zone.runOutsideAngular(async () => {
       await this.engine.init(this.hostRef.nativeElement);
-      this.engine.setTheme(this.mapTheme());
-      this.engine.setZoomLimits({ minZoom: this.viewMinZoom, maxZoom: this.viewMaxZoom });
-      this.engine.setGridEnabled(this.gridEnabled());
-      this.engine.setGridSize(this.gridSize);
+      this.applyInputSettings();
+      this.engine.setSettings(this.buildSettings());
       this.applyStatusStyles();
-      this.engine.loadSpaces(TEST_SPACES);
+      this.engine.loadSpaces(this.spaces ?? TEST_SPACES);
+      this.engineReady = true;
+      this.ready.emit();
       // Start from a complete map view instead of the engine's 60px/60px
       // world offset. Fit is allowed to go below the interactive readable
       // minimum so the whole venue remains visible.
@@ -1411,6 +1434,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
               }
             : null,
           );
+          this.hoverChange.emit(id);
         }),
       );
 
@@ -1418,12 +1442,14 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
         this.zone.run(() => {
           this.selectedIds.set(ids);
           this.syncDrawerToSelection(ids);
+          this.selectionChange.emit(ids);
         }),
       );
 
       this.engine.on('modechange', (mode) =>
         this.zone.run(() => {
           this.mode.set(mode);
+          this.modeChange.emit(mode);
           if (mode === 'view') this.closeForm();
         }),
       );
@@ -1434,7 +1460,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
           this.lastTransform.set(
             `${id} → (${Math.round(geometry.x)}, ${Math.round(geometry.y)}), ${r}°`,
           );
+          this.spaceTransform.emit({ id, geometry });
         }),
+      );
+
+      this.engine.on('spaceschange', (spaces) =>
+        this.zone.run(() => this.spacesChange.emit(spaces)),
       );
 
       // FPS updates several times a second — too frequent to route through
@@ -1447,6 +1478,174 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     });
   }
 
+  ngOnChanges(changes: SimpleChanges): void {
+    if (!this.engineReady) return;
+
+    if (changes['statuses']) {
+      this.setStatuses(this.statuses ?? DEFAULT_STATUS_DEFINITIONS);
+    }
+
+    if (changes['settings']) {
+      this.applyInputSettings();
+      this.engine.setSettings(this.buildSettings());
+    }
+
+    if (changes['spaces'] && this.spaces) {
+      this.setMapSpaces(this.spaces);
+    }
+  }
+
+  private applyInputSettings(): void {
+    const settings = this.settings ?? {};
+    const zoom = settings.zoom ?? {};
+    const grid = settings.grid ?? {};
+
+    this.mapTheme.set(settings.theme ?? DEFAULT_SPATIAL_MAP_SETTINGS.theme);
+    this.viewMinZoom = zoom.minZoom ?? DEFAULT_SPATIAL_MAP_SETTINGS.zoom.minZoom;
+    this.viewBaseZoom = zoom.baseZoom ?? DEFAULT_SPATIAL_MAP_SETTINGS.zoom.baseZoom;
+    this.viewMaxZoom = zoom.maxZoom ?? DEFAULT_SPATIAL_MAP_SETTINGS.zoom.maxZoom;
+    this.gridEnabled.set(grid.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled);
+    this.gridSize = grid.size ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
+    this.statusDefinitions = (this.statuses ?? DEFAULT_STATUS_DEFINITIONS).map((status) => ({ ...status }));
+  }
+
+  private buildSettings(): SpatialMapSettings {
+    return {
+      theme: this.mapTheme(),
+      zoom: {
+        minZoom: this.viewMinZoom,
+        baseZoom: this.viewBaseZoom,
+        maxZoom: this.viewMaxZoom,
+      },
+      grid: {
+        enabled: this.gridEnabled(),
+        size: this.gridSize,
+      },
+    };
+  }
+
+  /**
+   * Programmatic integration API.
+   * The built-in Angular controls call the same public methods, so external
+   * code can drive the map without bypassing or replacing the UI workflow.
+   */
+  setMapSettings(settings: SpatialMapSettingsPatch): void {
+    this.settings = { ...(this.settings ?? {}), ...settings };
+
+    if (settings.theme) this.mapTheme.set(settings.theme);
+    if (settings.zoom?.minZoom !== undefined) this.viewMinZoom = settings.zoom.minZoom;
+    if (settings.zoom?.baseZoom !== undefined) this.viewBaseZoom = settings.zoom.baseZoom;
+    if (settings.zoom?.maxZoom !== undefined) this.viewMaxZoom = settings.zoom.maxZoom;
+    if (settings.grid?.enabled !== undefined) this.gridEnabled.set(settings.grid.enabled);
+    if (settings.grid?.size !== undefined) this.gridSize = settings.grid.size;
+
+    this.engine.setSettings(settings);
+  }
+
+  getMapSettings(): SpatialMapSettings {
+    return this.engine.getSettings();
+  }
+
+  setMapSpaces(spaces: Space[]): void {
+    this.spaces = spaces;
+    if (!this.engineReady) return;
+    this.engine.loadSpaces(spaces);
+    this.engine.camera.fitBounds(undefined, { duration: 0 });
+  }
+
+  setStatuses(statuses: MapStatusDefinition[]): void {
+    this.statusDefinitions = statuses.map((status) => ({ ...status }));
+    this.statuses = this.statusDefinitions;
+    this.applyStatusStyles();
+  }
+
+  addStatusDefinition(definition: MapStatusDefinition): void {
+    this.setStatuses([
+      ...this.statusDefinitions.filter((status) => status.key !== definition.key),
+      { ...definition },
+    ]);
+  }
+
+  updateStatusDefinition(key: string, patch: Partial<Omit<MapStatusDefinition, 'key'>>): void {
+    this.setStatuses(
+      this.statusDefinitions.map((status) =>
+        status.key === key ? { ...status, ...patch } : status,
+      ),
+    );
+  }
+
+  removeStatusDefinition(key: string): void {
+    this.removeStatus(key);
+  }
+
+  getSpace(id: string): Space | undefined {
+    return this.engine.getSpace(id);
+  }
+
+  getSpaceCount(): number {
+    return this.engine.getSpaceCount();
+  }
+
+  setSelectionRule(rule: Parameters<SpatialMapEngine['setSelectionRule']>[0]): void {
+    this.engine.setSelectionRule(rule);
+  }
+
+  selectSpaces(ids: string[]): void {
+    this.engine.clearSelection();
+    ids.forEach((id) => this.engine.selectSpace(id, true));
+  }
+
+  clearSelection(): void {
+    this.engine.clearSelection();
+  }
+
+  addSpace(space: Space): void {
+    this.engine.addSpace(space);
+  }
+
+  updateSpace(
+    id: string,
+    patch: Parameters<SpatialMapEngine['updateSpace']>[1],
+  ): void {
+    this.engine.updateSpace(id, patch);
+  }
+
+  removeSpace(id: string): void {
+    this.engine.removeSpace(id);
+  }
+
+  fitToMap(options?: Parameters<SpatialMapEngine['camera']['fitBounds']>[1]): void {
+    this.engine.camera.fitBounds(undefined, options);
+  }
+
+  flyTo(id: string, options?: Parameters<SpatialMapEngine['camera']['flyTo']>[1]): void {
+    this.engine.camera.flyTo(id, options);
+  }
+
+  setZoom(zoom: number): void {
+    this.engine.camera.setZoom(zoom);
+  }
+
+  getZoom(): number {
+    return this.engine.camera.getZoom();
+  }
+
+  setModeFromCode(mode: MapMode): void {
+    this.setMode(mode);
+  }
+
+  setFilterFromCode(filter: 'all' | SpaceStatus | 'selected'): void {
+    this.setVisualFilter(filter);
+  }
+
+  exportMap(): ReturnType<SpatialMapEngine['exportData']> {
+    return this.engine.exportData();
+  }
+
+  importMap(data: Parameters<SpatialMapEngine['importData']>[0]): void {
+    this.engine.importData(data);
+  }
+
   ngOnDestroy(): void {
     if (this.fpsIntervalId !== null) clearInterval(this.fpsIntervalId);
     this.engine.destroy();
@@ -1454,7 +1653,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   // ---- Mode / inspector drawer ----
 
-  protected setMode(mode: MapMode): void {
+  setMode(mode: MapMode): void {
     this.engine.setMode(mode);
 
     if (mode === 'view') {
@@ -1471,26 +1670,26 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected setMapTheme(theme: MapTheme): void {
+  setMapTheme(theme: MapTheme): void {
     this.mapTheme.set(theme);
     this.engine.setTheme(theme);
   }
 
-  protected toggleGrid(): void {
+  toggleGrid(): void {
     this.setGridEnabled(!this.gridEnabled());
   }
 
-  protected setGridEnabled(enabled: boolean): void {
+  setGridEnabled(enabled: boolean): void {
     this.gridEnabled.set(enabled);
     this.engine.setGridEnabled(enabled);
   }
 
-  protected setGridSize(size: number): void {
+  setGridSize(size: number): void {
     this.gridSize = size;
     this.engine.setGridSize(size);
   }
 
-  protected applyViewZoomSettings(): void {
+  applyViewZoomSettings(): void {
     this.viewMinZoom = Math.max(0.1, Math.min(this.viewMinZoom, this.viewMaxZoom));
     this.viewBaseZoom = Math.max(this.viewMinZoom, Math.min(this.viewBaseZoom, this.viewMaxZoom));
     this.viewMaxZoom = Math.max(this.viewBaseZoom, this.viewMaxZoom);
@@ -1504,12 +1703,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     }
   }
 
-  protected resetViewZoom(): void {
+  resetViewZoom(): void {
     this.applyViewZoomSettings();
     this.engine.camera.setZoom(this.viewBaseZoom, { duration: 300 });
   }
 
-  protected setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
+  setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
     this.visualFilter.set(kind);
     if (kind === 'all') {
       this.statusFilterSelection = '';
@@ -1521,6 +1720,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       this.statusFilterSelection = kind;
       this.engine.setVisualFilter({ type: 'status', status: kind });
     }
+    this.filterChange.emit(kind);
   }
 
   protected statusLabel(status: string | undefined): string {
@@ -1552,7 +1752,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       : 0x64748b;
   }
 
-  protected addStatus(): void {
+  addStatus(): void {
     const label = this.newStatusLabel.trim();
     if (!label) return;
 
@@ -1576,7 +1776,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.statusFilterSelection = '';
   }
 
-  protected updateStatusColor(key: string, color: string): void {
+  updateStatusColor(key: string, color: string): void {
     this.statusDefinitions = this.statusDefinitions.map((status) =>
       status.key === key ? { ...status, color } : status,
     );
@@ -1788,14 +1988,14 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.editingId.set(null);
   }
 
-  protected bringToFront(): void {
-    const id = this.editingId();
-    if (id) this.engine.bringToFront(id);
+  bringToFront(id?: string): void {
+    const targetId = id ?? this.editingId();
+    if (targetId) this.engine.bringToFront(targetId);
   }
 
-  protected sendToBack(): void {
-    const id = this.editingId();
-    if (id) this.engine.sendToBack(id);
+  sendToBack(id?: string): void {
+    const targetId = id ?? this.editingId();
+    if (targetId) this.engine.sendToBack(targetId);
   }
 
   // ---- Dev tools: camera ----

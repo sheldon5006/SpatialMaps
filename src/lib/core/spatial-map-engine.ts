@@ -16,6 +16,11 @@ import {
   SpatialMapExport,
   StatusStyleMap,
 } from './types';
+import {
+  DEFAULT_SPATIAL_MAP_SETTINGS,
+  SpatialMapSettings,
+  SpatialMapSettingsPatch,
+} from './spatial-map-settings';
 
 export type SpatialMapEngineEvents = SpaceRendererEvents;
 export type { MapMode, SelectionRule, VisualFilter };
@@ -50,8 +55,14 @@ export class SpatialMapEngine {
   private pointerInteraction: PointerInteraction | null = null;
   private transitions: CameraTransitions | null = null;
   private renderer: SpaceRenderer | null = null;
-  private theme: MapTheme = 'dark';
-  private cameraLimits = { minZoom: 0.45, maxZoom: 3.5 };
+  private theme: MapTheme = DEFAULT_SPATIAL_MAP_SETTINGS.theme;
+  private cameraLimits = {
+    minZoom: DEFAULT_SPATIAL_MAP_SETTINGS.zoom.minZoom,
+    maxZoom: DEFAULT_SPATIAL_MAP_SETTINGS.zoom.maxZoom,
+  };
+  private baseZoom = DEFAULT_SPATIAL_MAP_SETTINGS.zoom.baseZoom;
+  private gridEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled;
+  private gridSize = DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
 
   private readonly onTick = (): void => {
     this.transitions?.tick();
@@ -232,7 +243,52 @@ export class SpatialMapEngine {
   }
 
   setGridSize(size: number): void {
-    this.renderer?.setGridSize(size);
+    this.gridSize = Math.max(10, Math.min(500, Math.round(size)));
+    this.renderer?.setGridSize(this.gridSize);
+  }
+
+  setSettings(settings: SpatialMapSettingsPatch): void {
+    const nextZoom = {
+      minZoom: settings.zoom?.minZoom ?? this.cameraLimits.minZoom,
+      baseZoom: settings.zoom?.baseZoom ?? this.baseZoom,
+      maxZoom: settings.zoom?.maxZoom ?? this.cameraLimits.maxZoom,
+    };
+    const safeMin = Math.max(0.05, Math.min(nextZoom.minZoom, nextZoom.maxZoom));
+    const safeMax = Math.max(safeMin, nextZoom.maxZoom);
+    this.baseZoom = Math.max(safeMin, Math.min(nextZoom.baseZoom, safeMax));
+    this.setZoomLimits({ minZoom: safeMin, maxZoom: safeMax });
+
+    if (settings.theme) this.setTheme(settings.theme);
+
+    if (settings.grid) {
+      if (settings.grid.enabled !== undefined) {
+        this.gridEnabled = settings.grid.enabled;
+        this.renderer?.setGridEnabled(this.gridEnabled);
+      }
+      if (settings.grid.size !== undefined) {
+        this.gridSize = Math.max(10, Math.min(500, Math.round(settings.grid.size)));
+        this.renderer?.setGridSize(this.gridSize);
+      }
+    }
+  }
+
+  getSettings(): SpatialMapSettings {
+    return {
+      theme: this.theme,
+      zoom: {
+        minZoom: this.cameraLimits.minZoom,
+        baseZoom: this.baseZoom,
+        maxZoom: this.cameraLimits.maxZoom,
+      },
+      grid: {
+        enabled: this.gridEnabled,
+        size: this.gridSize,
+      },
+    };
+  }
+
+  fitToMap(options?: TransitionOptions): void {
+    this.transitions?.fitBounds(undefined, options);
   }
 
   on<K extends keyof SpatialMapEngineEvents>(
