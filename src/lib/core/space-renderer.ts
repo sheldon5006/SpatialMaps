@@ -1,6 +1,7 @@
 import {
   BlurFilter,
   Circle,
+  ColorMatrixFilter,
   Container,
   FederatedPointerEvent,
   Graphics,
@@ -36,11 +37,26 @@ const LABEL_OUTLINE_COLOR = 0x000000;
 const LABEL_MIN_WIDTH = 28;
 const LABEL_MIN_HEIGHT = 20;
 
-/** View-mode "focus" effect (selecting a space dims/blurs the rest, like
- *  an iOS app-switcher focus) — strong enough to read as "the rest of the
- *  map stepped back", gentle enough that dimmed spaces stay identifiable. */
-const FOCUS_BLUR_STRENGTH = 4;
-const FOCUS_DIM_ALPHA = 0.55;
+/**
+ * View-mode "focus" effect: selecting a space recedes everything else
+ * behind a frosted-glass/submerged look — soft blur, desaturated, a cool
+ * translucent pane over the top — rather than a flat dim. Kept gentle on
+ * both axes (low blur strength, moderate alpha) because a strong blur's
+ * render padding bleeds past a box's own bounds: on a tightly packed map
+ * that dulls the crisp edges of the SELECTED space sitting right next to
+ * it, which is the opposite of "highlighted".
+ */
+const FOCUS_BLUR_STRENGTH = 1.5;
+const FOCUS_DIM_ALPHA = 0.8;
+const FOCUS_DESATURATION = -0.6;
+const GLASS_TINT_COLOR = 0xbfe0fb;
+const GLASS_TINT_ALPHA = 0.16;
+const GLASS_EDGE_COLOR = 0xffffff;
+const GLASS_EDGE_ALPHA = 0.25;
+
+/** Selection gets a slight lift — a small scale-up reads as "raised toward
+ *  you", reinforcing the highlight beyond just the outline color. */
+const SELECTED_SCALE = 1.04;
 
 export interface CameraSnapshot {
   x: number;
@@ -77,6 +93,8 @@ interface SpaceNode {
   shape: Graphics;
   handle: Graphics;
   label: Text;
+  /** The "glass pane" drawn over a space when it's receded behind focus. */
+  glass: Graphics;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -119,15 +137,25 @@ export class SpaceRenderer {
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
-  /** One shared instance — applying the same filter to multiple display
-   *  objects is fine in Pixi and avoids allocating a GPU filter per space. */
-  private readonly focusBlurFilter = new BlurFilter({ strength: FOCUS_BLUR_STRENGTH });
+  /** Shared instances — applying the same filter to multiple display
+   *  objects is fine in Pixi and avoids allocating GPU filters per space.
+   *  Low strength + a fixed 4px padding keeps the blur's render bounds
+   *  from bleeding into a tightly adjacent neighbor (see FOCUS_BLUR_STRENGTH). */
+  private readonly focusBlurFilter = new BlurFilter({
+    strength: FOCUS_BLUR_STRENGTH,
+    quality: 4,
+  });
+  private readonly focusDesaturateFilter = new ColorMatrixFilter();
+
+  private readonly focusFilters = [this.focusBlurFilter, this.focusDesaturateFilter];
 
   constructor(
     private readonly world: Container,
     private readonly stage: Container,
     private readonly getCamera: () => CameraSnapshot,
   ) {
+    this.focusDesaturateFilter.saturate(FOCUS_DESATURATION, false);
+
     // Drag continuation: like PointerInteraction's panning, these use the
     // "global" variants so a move/rotate keeps tracking the pointer even
     // once it moves outside the dragged shape's own bounds.
@@ -315,18 +343,27 @@ export class SpaceRenderer {
     reordered.forEach((space, id) => this.spaceData.set(id, space));
   }
 
-  /** View mode + an active selection dims/blurs everything else — an iOS-style
-   *  focus effect. Edit mode never applies it (you need full clarity while editing). */
+  /**
+   * View mode + an active selection recedes everything else behind a
+   * frosted-glass look (blur + desaturate + a translucent pane), while the
+   * selected space(s) stay crisp and lift slightly. Edit mode never applies
+   * it — full clarity is needed while editing.
+   */
   private updateFocusEffect(): void {
     const focusing = this.mode === 'view' && this.selectedIds.size > 0;
     this.spaceNodes.forEach((entry, id) => {
       const isSelected = this.selectedIds.has(id);
+
       if (focusing && !isSelected) {
-        entry.node.filters = [this.focusBlurFilter];
+        entry.node.filters = this.focusFilters;
         entry.node.alpha = FOCUS_DIM_ALPHA;
+        entry.node.scale.set(1);
+        entry.glass.visible = true;
       } else {
         entry.node.filters = [];
         entry.node.alpha = 1;
+        entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
+        entry.glass.visible = false;
       }
     });
   }
@@ -367,6 +404,14 @@ export class SpaceRenderer {
     label.anchor.set(0.5);
     node.addChild(label);
 
+    // The "glass pane" — a translucent cool-toned overlay shown only when
+    // this space is receded behind another one's focus. Lives above the
+    // label/image so it genuinely reads as a pane sitting over the booth.
+    const glass = new Graphics();
+    glass.eventMode = 'none';
+    glass.visible = false;
+    node.addChild(glass);
+
     const handle = new Graphics();
     handle.eventMode = 'none';
     handle.hitArea = new Circle(0, 0, HANDLE_HIT_RADIUS);
@@ -375,7 +420,7 @@ export class SpaceRenderer {
     handle.on('pointerdown', (event) => this.onHandlePointerDown(space.id, event));
     node.addChild(handle);
 
-    const entry: SpaceNode = { node, shape, handle, label };
+    const entry: SpaceNode = { node, shape, handle, label, glass };
 
     node.eventMode = 'static';
     const cursor = this.mode === 'edit' ? 'move' : 'pointer';
@@ -501,6 +546,7 @@ export class SpaceRenderer {
 
     this.updateImage(entry, space);
     this.updateLabel(entry, space);
+    this.drawGlass(entry.glass, geometry); // size only — visibility is set by updateFocusEffect()
 
     this.drawHandle(entry.handle, geometry);
     const showHandle = this.mode === 'edit' && this.selectedIds.has(space.id);
@@ -525,6 +571,15 @@ export class SpaceRenderer {
     entry.label.style.wordWrapWidth = Math.max(10, width - 8);
     entry.label.style.wordWrap = true;
     entry.label.position.set(width / 2, height / 2);
+  }
+
+  /** The translucent pane shown over a receded (focus-dimmed) space. */
+  private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
+    glass
+      .clear()
+      .rect(0, 0, geometry.width, geometry.height)
+      .fill({ color: GLASS_TINT_COLOR, alpha: GLASS_TINT_ALPHA })
+      .stroke({ color: GLASS_EDGE_COLOR, width: 1, alpha: GLASS_EDGE_ALPHA });
   }
 
   private drawHandle(handle: Graphics, geometry: Space['geometry']): void {
