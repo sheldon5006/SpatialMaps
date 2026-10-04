@@ -27,8 +27,12 @@ const STATUS_OPTIONS: SpaceStatus[] = [
 
 const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string; icon: string }> = [
   { value: 'rectangle', label: 'Rectangle', icon: '▭' },
+  { value: 'rounded-rectangle', label: 'Rounded', icon: '▢' },
   { value: 'circle', label: 'Circle', icon: '○' },
   { value: 'ellipse', label: 'Ellipse', icon: '⬭' },
+  { value: 'line', label: 'Path', icon: '—' },
+  { value: 'triangle', label: 'Triangle', icon: '△' },
+  { value: 'diamond', label: 'Diamond', icon: '◇' },
 ];
 
 /** Human-readable label + swatch color per status, for the legend and
@@ -856,12 +860,16 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected setShape(shape: SpaceGeometry['type']): void {
     this.form.shape = shape;
 
-    // A circle is always rendered as a true circle, using the current width
-    // as its diameter. Ellipse/rectangle keep independent dimensions.
     if (shape === 'circle') {
+      // Circle uses width as its diameter, so keep both dimensions equal.
       const diameter = Math.max(4, Number(this.form.width) || 80);
       this.form.width = diameter;
       this.form.height = diameter;
+    }
+
+    if (shape === 'line') {
+      // Path is represented as a thin rotated vector segment.
+      this.form.height = Math.max(3, Math.min(8, Number(this.form.height) || 6));
     }
   }
 
