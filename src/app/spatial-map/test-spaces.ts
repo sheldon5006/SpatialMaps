@@ -393,7 +393,6 @@ export const TEST_SPACES: Space[] = [
   prop('main-cross', 'Main East West Road', 0, 735, 1200, 150, '#c8c6bf', 'rounded-rectangle'),
   prop('upper-cross', 'Upper Market Road', 115, 492, 970, 82, '#d0cec8', 'rounded-rectangle'),
   prop('lower-cross', 'Lower Market Road', 72, 1008, 1050, 82, '#d0cec8', 'rounded-rectangle'),
-  prop('central-loop', 'Central Loop Road', 430, 500, 340, 78, '#d1cfca', 'rounded-rectangle'),
 
   // Parking lots
   prop('parking-west-lot', 'West Parking Lot', 18, 208, 192, 270, '#55585b', 'rounded-rectangle'),
@@ -415,12 +414,12 @@ export const TEST_SPACES: Space[] = [
   prop('west-lawn', 'West Market Lawn', 286, 560, 226, 160, '#d7ebcf', 'ellipse'),
   prop('east-lawn', 'East Market Lawn', 688, 560, 226, 160, '#d7ebcf', 'ellipse'),
   prop('market-pond', 'Market Pond', 542, 566, 124, 92, '#78b9cf', 'ellipse'),
-  prop('food-tent', 'Food Court Tent', 42, 610, 224, 120, '#eadfc9', 'triangle'),
+  prop('food-tent', 'Food Court Tent', 32, 586, 180, 96, '#eadfc9', 'triangle'),
   prop('event-stage', 'Live Stage', 996, 585, 170, 116, '#334149', 'rounded-rectangle'),
   prop('market-office-zone', 'Market Office', 394, 1204, 184, 140, '#e4aa72', 'rounded-rectangle'),
 
   // Branded image used as an accent, not as the whole map.
-  imageProp('market-logo', 'Riverside Outdoor Market', 48, 28, 340, 122, marketLogo()),
+  imageProp('market-logo', 'Riverside Outdoor Market', 28, 22, 190, 88, marketLogo()),
 
   // ------------------------------------------------------------------------
   // First-class text labels
@@ -448,37 +447,36 @@ export const TEST_SPACES: Space[] = [
   booth('A105', 'North 05', 334, 164, 62, 34, 'maintenance'),
   booth('A106', 'North 06', 404, 164, 62, 34, 'reserved', 12),
 
-  ...boothGrid('north-west', 'NW Shop', 264, 354, 3, 2, 60, 34, 8, 9, 1),
-  ...boothGrid('north-east', 'NE Shop', 712, 354, 3, 2, 60, 34, 8, 9, 2),
+  // ------------------------------------------------------------------------
+  // Garden Market — one clean three-by-three block inside its district.
+  // ------------------------------------------------------------------------
+  ...boothGrid('garden', 'Garden', 270, 326, 3, 3, 58, 32, 10, 8, 0),
 
   // ------------------------------------------------------------------------
-  // Garden Market
+  // North East Market — separated from Garden by the central spine.
   // ------------------------------------------------------------------------
-  ...boothGrid('garden', 'Garden', 272, 324, 3, 3, 60, 34, 8, 9, 0),
-  ...boothGrid('garden-low', 'Garden', 282, 416, 3, 1, 60, 34, 8, 0, 2),
+  ...boothGrid('north-east', 'NE Shop', 724, 110, 3, 2, 58, 32, 10, 10, 1),
 
   // ------------------------------------------------------------------------
-  // Riverside Row
+  // Riverside Row — one clean three-by-three block.
   // ------------------------------------------------------------------------
-  ...boothGrid('river', 'Riverside', 716, 322, 3, 3, 60, 34, 8, 9, 1),
-  booth('river-feature', 'Riverside 10', 850, 416, 70, 38, 'reserved'),
+  ...boothGrid('river', 'Riverside', 724, 326, 3, 3, 58, 32, 10, 8, 1),
 
   // ------------------------------------------------------------------------
   // Food court / craft area
   // ------------------------------------------------------------------------
-  ...boothGrid('food', 'Food', 270, 654, 3, 1, 60, 34, 8, 0, 0),
-  ...boothGrid('craft', 'Craft', 270, 954, 3, 1, 60, 34, 8, 0, 1),
+  ...boothGrid('food', 'Food', 270, 654, 3, 1, 58, 32, 10, 0, 0),
 
   // Service plaza
-  booth('service-01', 'Service 01', 712, 654, 62, 34, 'reserved'),
-  booth('service-02', 'Service 02', 782, 654, 62, 34, 'available'),
-  booth('service-03', 'Service 03', 852, 654, 62, 34, 'booked'),
+  booth('service-01', 'Service 01', 718, 654, 58, 32, 'reserved'),
+  booth('service-02', 'Service 02', 786, 654, 58, 32, 'available'),
+  booth('service-03', 'Service 03', 854, 654, 58, 32, 'booked'),
 
   // ------------------------------------------------------------------------
-  // Lower east/west shop rows
+  // Lower market rows — one row per district, no stacked overlap.
   // ------------------------------------------------------------------------
-  ...boothGrid('west-lower', 'West', 250, 954, 3, 1, 60, 34, 8, 0, 2),
-  ...boothGrid('east-lower', 'East', 716, 954, 3, 1, 60, 34, 8, 0, 0),
+  ...boothGrid('west-lower', 'West', 264, 944, 3, 1, 58, 32, 10, 0, 2),
+  ...boothGrid('east-lower', 'East', 728, 944, 3, 1, 58, 32, 10, 0, 0),
 
   // ------------------------------------------------------------------------
   // POIs / services - image props
@@ -487,11 +485,11 @@ export const TEST_SPACES: Space[] = [
   imageProp('poi-parking-east', 'East Parking', 1068, 246, 64, 64, iconImage('parking')),
   imageProp('poi-parking-south', 'South Parking', 96, 1236, 64, 64, iconImage('parking')),
   imageProp('poi-bus', 'Bus Stop', 1088, 1048, 64, 64, iconImage('bus')),
-  imageProp('poi-info', 'Information Booth', 746, 694, 64, 64, iconImage('info')),
-  imageProp('poi-atm', 'ATM', 392, 236, 64, 64, iconImage('atm')),
-  imageProp('poi-restrooms', 'Restrooms', 842, 698, 64, 64, iconImage('restroom')),
-  imageProp('poi-accessible', 'Accessible', 930, 700, 64, 64, iconImage('wheelchair')),
-  imageProp('poi-firstaid', 'First Aid', 1008, 704, 64, 64, iconImage('firstaid')),
+  imageProp('poi-info', 'Information Booth', 728, 680, 56, 56, iconImage('info')),
+  imageProp('poi-atm', 'ATM', 392, 236, 56, 56, iconImage('atm')),
+  imageProp('poi-restrooms', 'Restrooms', 798, 680, 56, 56, iconImage('restroom')),
+  imageProp('poi-accessible', 'Accessible', 866, 680, 56, 56, iconImage('wheelchair')),
+  imageProp('poi-firstaid', 'First Aid', 934, 680, 56, 56, iconImage('firstaid')),
   imageProp('poi-waste', 'Waste & Recycling', 102, 1098, 64, 64, iconImage('waste')),
   imageProp('poi-food', 'Food Truck', 54, 664, 64, 64, iconImage('food')),
   imageProp('poi-wifi', 'Guest WiFi', 1080, 590, 64, 64, iconImage('wifi')),
