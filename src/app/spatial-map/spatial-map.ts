@@ -11,7 +11,13 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
-import { Space, SpaceGeometry, SpaceStatus } from '../../lib/core/types';
+import {
+  Space,
+  SpaceElementType,
+  SpaceGeometry,
+  SpacePropKind,
+  SpaceStatus,
+} from '../../lib/core/types';
 import { generateBenchSpaces } from './generate-bench-spaces';
 import { TEST_SPACES } from './test-spaces';
 
@@ -34,6 +40,47 @@ const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string;
   { value: 'triangle', label: 'Triangle', icon: '△' },
   { value: 'diamond', label: 'Diamond', icon: '◇' },
 ];
+const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = [
+  { value: 'booth', label: 'Booth' },
+  { value: 'infrastructure', label: 'Infrastructure' },
+  { value: 'prop', label: 'Prop' },
+];
+
+const INFRASTRUCTURE_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
+  { value: 'road', label: 'Road' },
+  { value: 'path', label: 'Path' },
+  { value: 'building', label: 'Building' },
+  { value: 'parking', label: 'Parking' },
+  { value: 'entrance', label: 'Entrance' },
+  { value: 'garden', label: 'Garden' },
+];
+
+const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
+  { value: 'tree', label: 'Tree' },
+  { value: 'bench', label: 'Bench' },
+  { value: 'seating', label: 'Seating' },
+  { value: 'toilet', label: 'Toilet' },
+  { value: 'garbage-bin', label: 'Garbage bin' },
+  { value: 'information', label: 'Information' },
+];
+
+function defaultShapeForElement(type: SpaceElementType): SpaceGeometry['type'] {
+  switch (type) {
+    case 'infrastructure':
+      return 'line';
+    case 'prop':
+      return 'circle';
+    case 'booth':
+    default:
+      return 'rectangle';
+  }
+}
+
+function defaultPropKindForElement(type: SpaceElementType): SpacePropKind | null {
+  if (type === 'infrastructure') return 'path';
+  if (type === 'prop') return 'tree';
+  return null;
+}
 
 /** Human-readable label + swatch color per status, for the legend and
  *  tooltip — kept here rather than invented per-use so they stay in sync. */
@@ -71,6 +118,8 @@ const SIZE_PRESETS: SizePreset[] = [
 interface SpaceFormState {
   name: string;
   status: SpaceStatus;
+  elementType: SpaceElementType;
+  propKind: SpacePropKind | null;
   shape: SpaceGeometry['type'];
   width: number;
   height: number;
@@ -81,6 +130,8 @@ function defaultFormState(): SpaceFormState {
   return {
     name: '',
     status: 'available',
+    elementType: 'booth',
+    propKind: null,
     shape: 'rectangle',
     width: 80,
     height: 60,
@@ -172,6 +223,34 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         </label>
 
         @if (mode() === 'edit') {
+          <label class="field">
+            <span>Map element</span>
+            <div class="element-picker" role="group" aria-label="Map element type">
+              @for (element of elementTypeOptions; track element.value) {
+                <button
+                  type="button"
+                  class="element-option"
+                  [class.active]="form.elementType === element.value"
+                  [attr.aria-pressed]="form.elementType === element.value"
+                  (click)="setElementType(element.value)"
+                >
+                  {{ element.label }}
+                </button>
+              }
+            </div>
+          </label>
+
+          @if (form.elementType !== 'booth') {
+            <label class="field">
+              <span>{{ form.elementType === 'infrastructure' ? 'Infrastructure type' : 'Prop type' }}</span>
+              <select [(ngModel)]="form.propKind" (ngModelChange)="onPropKindChange($event)">
+                @for (option of currentPropOptions(); track option.value) {
+                  <option [ngValue]="option.value">{{ option.label }}</option>
+                }
+              </select>
+            </label>
+          }
+
           <label class="field">
             <span>Vector shape</span>
             <div class="shape-picker" role="group" aria-label="Vector shape">
@@ -494,6 +573,27 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         font: inherit;
       }
 
+      .element-picker {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .element-option {
+        min-height: 34px;
+        padding: 6px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+      }
+
+      .element-option.active {
+        background: rgba(58, 122, 254, 0.18);
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
       .shape-picker {
         display: grid;
         grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -728,6 +828,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly sizePresets = SIZE_PRESETS;
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
+  protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
+  protected readonly infrastructureOptions = INFRASTRUCTURE_OPTIONS;
+  protected readonly propOptions = PROP_OPTIONS;
   protected form: SpaceFormState = defaultFormState();
 
   private readonly engine = new SpatialMapEngine();
@@ -831,6 +934,8 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
+      elementType: space.type === 'infrastructure' ? 'infrastructure' : space.type === 'prop' ? 'prop' : 'booth',
+      propKind: space.properties.propKind ?? null,
       shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
@@ -857,6 +962,28 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected applyPreset(preset: SizePreset): void {
     this.form.width = preset.width;
     this.form.height = preset.height;
+  }
+
+  protected setElementType(elementType: SpaceElementType): void {
+    this.form.elementType = elementType;
+    this.form.propKind = defaultPropKindForElement(elementType);
+    this.form.shape = defaultShapeForElement(elementType);
+
+    if (this.form.shape === 'circle') {
+      const diameter = Math.max(4, Number(this.form.width) || 80);
+      this.form.width = diameter;
+      this.form.height = diameter;
+    }
+  }
+
+  protected currentPropOptions(): Array<{ value: SpacePropKind; label: string }> {
+    return this.form.elementType === 'infrastructure'
+      ? this.infrastructureOptions
+      : this.propOptions;
+  }
+
+  protected onPropKindChange(kind: SpacePropKind | null): void {
+    this.form.propKind = kind;
   }
 
   protected setShape(shape: SpaceGeometry['type']): void {
@@ -901,9 +1028,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, shape, width, height, imageDataUrl } = this.form;
+    const { name, status, elementType, propKind, shape, width, height, imageDataUrl } = this.form;
     const w = Math.max(4, Number(width) || 80);
     const h = shape === 'circle' ? w : Math.max(4, Number(height) || 60);
+    const savedType: SpaceElementType = elementType;
 
     if (this.isAdding()) {
       const id = `space-${Date.now()}`;
