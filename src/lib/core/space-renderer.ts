@@ -418,8 +418,9 @@ export class SpaceRenderer {
 
     if (activeIds.size === 0 && this.pressAnimations.size === 0) return;
 
-    // Only the perimeter rope loops continuously. The booth itself does not pulse.
-    this.highlightRopePhase = (this.highlightRopePhase + deltaMS * 0.028) % 1;
+    // Keep the rope movement calm. The visible effect should read like a
+    // slow braided/tape loop rather than a stream of fast dashes.
+    this.highlightRopePhase = (this.highlightRopePhase + deltaMS * 0.014) % 1;
 
     const animatedIds = new Set<string>([
       ...Array.from(this.pressAnimations.keys()),
@@ -1674,12 +1675,12 @@ export class SpaceRenderer {
 
     if (loop.length < 2 || perimeter <= 0) return;
 
-    // Denser rope: shorter strokes and tighter spacing create a more
-    // continuous braided/perimeter motion around the selected space.
-    const dashLength = Math.max(3.4, Math.min(5.2, minSide * 0.06));
-    const gap = Math.max(1.8, dashLength * 0.42);
-    const pitch = dashLength + gap;
-    const dashCount = Math.max(12, Math.ceil(perimeter / pitch));
+    // Rope/tape construction: each italic segment slightly overlaps the
+    // next one, so the colors read as a connected braided strip rather than
+    // separate floating dashes.
+    const dashLength = Math.max(5.2, Math.min(7.2, minSide * 0.075));
+    const pitch = dashLength * 0.72;
+    const dashCount = Math.max(10, Math.ceil(perimeter / pitch));
     const travel = perimeter / dashCount;
     const slashAngle = Math.PI * 0.26;
 
@@ -1712,9 +1713,9 @@ export class SpaceRenderer {
       rope.moveTo(cx - dx, cy - dy);
       rope.lineTo(cx + dx, cy + dy);
       rope.stroke({
-        color: index % 2 === 0 ? 0x00f4ff : 0xf3f4f6,
+        color: index % 2 === 0 ? 0x00efff : 0xe7e9ed,
         alpha: 1.0 * strength,
-        width: 1.9,
+        width: 2.0,
         cap: 'round',
       });
     }
