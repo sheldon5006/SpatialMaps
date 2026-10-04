@@ -251,13 +251,13 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
               </div>
             </label>
 
-            <label class="field toggle-field">
+            <div class="field toggle-field">
               <span>Text</span>
               <label class="toggle-option">
                 <input type="checkbox" [(ngModel)]="form.textVisible" />
                 <span>Show prop name on map</span>
               </label>
-            </label>
+            </div>
 
             @if (form.propRepresentation === 'shape') {
               <label class="field">
@@ -322,8 +322,8 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
               Uses the Name field as the text displayed on the map.
             </p>
           }
+        }
 
-        
         @if (form.elementType !== 'textbox') {
           <label class="field">
             <span>Status</span>
