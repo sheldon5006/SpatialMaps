@@ -2116,7 +2116,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
-    this.setSearchHighlight(id);
+    // A search-result click is a fly-to focus, so use the temporary focus rope
+    // rather than the persistent search-highlight state. The rope therefore
+    // disappears when the 1.5s fly-to focus timer expires.
+    this.setSearchHighlight(null);
 
     // Keep the target booth in the visible map area rather than centering it
     // underneath the persistent search panel.
