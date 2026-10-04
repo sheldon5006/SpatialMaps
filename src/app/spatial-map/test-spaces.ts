@@ -3,163 +3,201 @@ import { Space, SpaceStatus } from '../../lib/core/types';
 const svgDataUrl = (svg: string): string =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
-const backdropImage = (): string => svgDataUrl(`
-<svg xmlns="http://www.w3.org/2000/svg" width="760" height="1060" viewBox="0 0 760 1060">
+/**
+ * This fixture is a polished cartographic-style event map inspired by the
+ * supplied reference: dark road network, warm base terrain, neighborhood
+ * districts, parking lots, a central green/pond, service icons and a compact
+ * legend. Booths remain real interactive Spaces above the illustrated base.
+ */
+
+const siteBackdrop = (): string => svgDataUrl(`
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="760" viewBox="0 0 1280 760">
   <defs>
     <linearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#f4f0df"/>
-      <stop offset="1" stop-color="#ebe6d3"/>
+      <stop offset="0" stop-color="#f3f0e8"/>
+      <stop offset="1" stop-color="#e6e1d8"/>
     </linearGradient>
-    <linearGradient id="road" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#d8dde2"/>
-      <stop offset="1" stop-color="#c7cdd3"/>
+
+    <linearGradient id="road" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#151a1f"/>
+      <stop offset="1" stop-color="#242a30"/>
     </linearGradient>
-    <pattern id="parking" width="38" height="22" patternUnits="userSpaceOnUse">
-      <path d="M0 22 L38 0" stroke="#b9c1c8" stroke-width="2"/>
+
+    <pattern id="parking" width="26" height="34" patternUnits="userSpaceOnUse">
+      <rect width="26" height="34" fill="#d9d4cc"/>
+      <path d="M0 34 L26 0" stroke="#b5afa7" stroke-width="2"/>
     </pattern>
-    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
-      <feDropShadow dx="0" dy="2" stdDeviation="2" flood-color="#38506b" flood-opacity=".15"/>
+
+    <pattern id="parkingDark" width="28" height="36" patternUnits="userSpaceOnUse">
+      <rect width="28" height="36" fill="#20262c"/>
+      <path d="M0 36 L28 0" stroke="#697179" stroke-width="1.5"/>
+    </pattern>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#1b2025" flood-opacity=".15"/>
     </filter>
   </defs>
 
-  <rect width="760" height="1060" fill="url(#ground)"/>
+  <rect width="1280" height="760" fill="url(#ground)"/>
 
-  <!-- Main roads -->
-  <rect x="282" y="0" width="70" height="960" rx="26" fill="url(#road)"/>
-  <rect x="0" y="438" width="760" height="58" rx="22" fill="url(#road)"/>
-  <rect x="0" y="858" width="760" height="54" rx="22" fill="url(#road)"/>
-  <path d="M300 18 V940" stroke="#f7f8f9" stroke-width="3" stroke-dasharray="14 16" opacity=".85"/>
-  <path d="M0 467 H760" stroke="#f7f8f9" stroke-width="3" stroke-dasharray="14 16" opacity=".85"/>
-  <path d="M0 885 H760" stroke="#f7f8f9" stroke-width="3" stroke-dasharray="14 16" opacity=".85"/>
+  <!-- Outer parking fields -->
+  <rect x="0" y="18" width="175" height="210" rx="18" fill="url(#parkingDark)"/>
+  <rect x="1098" y="196" width="166" height="210" rx="18" fill="url(#parkingDark)"/>
+  <rect x="300" y="540" width="250" height="186" rx="18" fill="url(#parkingDark)"/>
+  <rect x="1130" y="520" width="128" height="210" rx="18" fill="url(#parkingDark)"/>
 
-  <!-- Food vendors -->
-  <rect x="38" y="66" width="224" height="356" rx="20" fill="#eef4f8" stroke="#bac8d3" stroke-width="2" filter="url(#softShadow)"/>
-  <rect x="54" y="82" width="192" height="52" rx="16" fill="#d8eff1"/>
-  <text x="150" y="112" text-anchor="middle" font-family="Arial" font-size="22" font-weight="800" fill="#20323e">BEVERAGE TENT</text>
-  <text x="150" y="152" text-anchor="middle" font-family="Arial" font-size="17" font-weight="800" fill="#50606b">FOOD VENDORS</text>
+  <!-- Main road network -->
+  <path d="M0 264 C220 245 356 204 520 128 C652 68 794 74 920 146 C1032 210 1140 246 1280 236"
+        fill="none" stroke="url(#road)" stroke-width="76" stroke-linecap="round"/>
+  <path d="M255 0 C288 124 420 218 534 307 C646 394 808 446 938 497 C1036 535 1101 602 1117 760"
+        fill="none" stroke="url(#road)" stroke-width="68" stroke-linecap="round"/>
+  <path d="M0 465 C178 450 344 444 490 478 C640 512 792 574 920 588 C1060 603 1180 565 1280 535"
+        fill="none" stroke="url(#road)" stroke-width="62" stroke-linecap="round"/>
+  <path d="M750 110 C704 184 706 272 759 334 C816 401 916 405 1002 367"
+        fill="none" stroke="url(#road)" stroke-width="34" stroke-linecap="round"/>
 
-  <!-- General store -->
-  <rect x="366" y="76" width="178" height="258" rx="22" fill="#f7f7f4" stroke="#c8c8c0" stroke-width="2" filter="url(#softShadow)"/>
-  <path d="M390 111 H520" stroke="#6b7280" stroke-width="5" stroke-linecap="round"/>
-  <rect x="392" y="124" width="126" height="44" rx="12" fill="#f1efe8"/>
-  <text x="455" y="150" text-anchor="middle" font-family="Arial" font-size="19" font-weight="800" fill="#27323b">GENERAL STORE</text>
+  <!-- Road center lines -->
+  <path d="M20 264 C220 245 356 204 520 128 C652 68 794 74 920 146 C1032 210 1140 246 1260 236"
+        fill="none" stroke="#f7f8f8" stroke-width="4" stroke-dasharray="18 18" stroke-linecap="round" opacity=".75"/>
+  <path d="M255 15 C288 124 420 218 534 307 C646 394 808 446 938 497 C1036 535 1101 602 1117 745"
+        fill="none" stroke="#f7f8f8" stroke-width="4" stroke-dasharray="18 18" stroke-linecap="round" opacity=".75"/>
+  <path d="M15 465 C178 450 344 444 490 478 C640 512 792 574 920 588 C1060 603 1180 565 1265 535"
+        fill="none" stroke="#f7f8f8" stroke-width="4" stroke-dasharray="18 18" stroke-linecap="round" opacity=".75"/>
 
-  <!-- Tree grove -->
-  <path d="M548 54 C585 34 693 55 706 115 L700 330 C672 353 567 348 544 309 Z" fill="#b9d4a6" opacity=".7"/>
-  <g fill="#2f7d32">
-    <circle cx="570" cy="72" r="19"/><circle cx="604" cy="64" r="23"/><circle cx="640" cy="73" r="18"/>
-    <circle cx="677" cy="82" r="24"/><circle cx="695" cy="120" r="20"/><circle cx="585" cy="108" r="25"/>
-    <circle cx="622" cy="108" r="20"/><circle cx="657" cy="111" r="26"/><circle cx="573" cy="146" r="21"/>
-    <circle cx="611" cy="149" r="25"/><circle cx="649" cy="148" r="23"/><circle cx="687" cy="160" r="22"/>
-    <circle cx="580" cy="193" r="22"/><circle cx="619" cy="192" r="27"/><circle cx="657" cy="196" r="21"/>
-    <circle cx="694" cy="208" r="24"/><circle cx="576" cy="240" r="22"/><circle cx="610" cy="232" r="25"/>
-    <circle cx="648" cy="243" r="26"/><circle cx="687" cy="252" r="21"/><circle cx="584" cy="282" r="21"/>
-    <circle cx="620" cy="284" r="24"/><circle cx="660" cy="286" r="23"/>
-  </g>
-  <g fill="#4f9a45" opacity=".7">
-    <circle cx="592" cy="91" r="8"/><circle cx="632" cy="89" r="7"/><circle cx="668" cy="133" r="8"/>
-    <circle cx="601" cy="174" r="7"/><circle cx="681" cy="186" r="8"/><circle cx="590" cy="218" r="7"/>
-    <circle cx="639" cy="219" r="8"/><circle cx="612" cy="268" r="7"/>
+  <!-- Neutral building footprints -->
+  <g filter="url(#shadow)">
+    <rect x="52" y="72" width="350" height="136" rx="24" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
+    <rect x="446" y="80" width="312" height="146" rx="24" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
+    <rect x="782" y="162" width="266" height="182" rx="24" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
+    <rect x="418" y="320" width="376" height="180" rx="28" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
+    <rect x="810" y="388" width="184" height="184" rx="24" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
+    <rect x="1000" y="470" width="118" height="210" rx="22" fill="#fbfaf7" stroke="#d4cfc6" stroke-width="3"/>
   </g>
 
-  <!-- Camp 3 -->
-  <rect x="486" y="330" width="224" height="122" rx="18" fill="#fff9fb" stroke="#d6c0c8" stroke-width="2"/>
-  <rect x="486" y="330" width="224" height="34" rx="18" fill="#f1c7d5"/>
-  <text x="598" y="354" text-anchor="middle" font-family="Arial" font-size="20" font-weight="800" fill="#a21e58">CAMP 3</text>
+  <!-- Neighborhood district tints -->
+  <path d="M58 82 H396 Q410 82 410 96 V184 Q410 202 392 202 H72 Q58 202 58 186 Z"
+        fill="#f4be80" opacity=".52"/>
+  <path d="M452 88 H748 Q758 88 758 102 V214 Q758 228 742 228 H468 Q452 228 452 212 Z"
+        fill="#c5d99e" opacity=".50"/>
+  <path d="M788 168 H1040 V338 H788 Q782 338 782 330 V180 Q782 168 788 168 Z"
+        fill="#f0b4c4" opacity=".48"/>
+  <path d="M426 326 H784 V494 H426 Z"
+        fill="#b8d7bf" opacity=".44"/>
+  <path d="M818 396 H990 V566 H818 Z"
+        fill="#9cc9ed" opacity=".45"/>
+  <path d="M1008 476 H1112 V676 H1008 Z"
+        fill="#d9c09e" opacity=".44"/>
 
-  <!-- Camp 2 -->
-  <rect x="486" y="506" width="224" height="196" rx="18" fill="#fff9fb" stroke="#d6c0c8" stroke-width="2"/>
-  <rect x="486" y="506" width="224" height="38" rx="18" fill="#f1c7d5"/>
-  <text x="598" y="531" text-anchor="middle" font-family="Arial" font-size="21" font-weight="800" fill="#a21e58">CAMP 2</text>
+  <!-- Central park / pond -->
+  <path d="M408 282 C480 235 610 238 682 270 C734 294 778 322 806 360 C760 414 676 452 575 447 C480 443 419 402 388 348 Z"
+        fill="#d7e4cb"/>
+  <path d="M542 318 C578 294 616 296 644 317 C669 336 671 359 649 378 C620 403 578 398 552 383 C526 368 518 338 542 318 Z"
+        fill="#78b9cf" stroke="#5b9db6" stroke-width="3"/>
 
-  <!-- Car sales -->
-  <rect x="38" y="524" width="224" height="218" rx="20" fill="#f7d7bd" stroke="#dfb497" stroke-width="2" filter="url(#softShadow)"/>
-  <text x="150" y="552" text-anchor="middle" font-family="Arial" font-size="15" font-weight="800" fill="#6b5342">PARTS PICKUP</text>
-  <text x="150" y="598" text-anchor="middle" font-family="Arial" font-size="24" font-weight="900" fill="#2f3439">CAR SALES &amp;</text>
-  <text x="150" y="628" text-anchor="middle" font-family="Arial" font-size="24" font-weight="900" fill="#2f3439">CAR SHOW</text>
+  <!-- Tree clusters -->
+  <g fill="#2d7c3d">
+    <circle cx="446" cy="284" r="12"/><circle cx="470" cy="268" r="13"/><circle cx="496" cy="281" r="11"/>
+    <circle cx="704" cy="286" r="13"/><circle cx="730" cy="300" r="11"/><circle cx="754" cy="281" r="13"/>
+    <circle cx="450" cy="408" r="13"/><circle cx="476" cy="421" r="11"/><circle cx="726" cy="417" r="14"/>
+    <circle cx="752" cy="430" r="11"/><circle cx="778" cy="412" r="13"/>
+    <circle cx="676" cy="350" r="12"/><circle cx="698" cy="369" r="10"/>
+  </g>
+  <g fill="#5b9c4d" opacity=".82">
+    <circle cx="460" cy="293" r="6"/><circle cx="489" cy="270" r="5"/><circle cx="720" cy="312" r="6"/>
+    <circle cx="468" cy="413" r="5"/><circle cx="742" cy="421" r="6"/><circle cx="690" cy="358" r="5"/>
+  </g>
 
-  <!-- Arts Park -->
-  <rect x="44" y="762" width="218" height="72" rx="18" fill="#f1e6ba" stroke="#d1bf7c" stroke-width="2"/>
-  <text x="153" y="806" text-anchor="middle" font-family="Arial" font-size="20" font-weight="800" fill="#8b5b2a">ARTS PARK</text>
+  <!-- Event tent -->
+  <path d="M870 230 L930 176 L990 230 Z" fill="#e5e0d6" stroke="#bcb5aa" stroke-width="3"/>
+  <path d="M900 230 V194 M930 230 V176 M960 230 V194" stroke="#bcb5aa" stroke-width="3"/>
+  <text x="930" y="250" text-anchor="middle" font-family="Arial" font-size="14" font-weight="700" fill="#8c847a">EVENT TENT</text>
 
-  <!-- Overflow parking -->
-  <rect x="366" y="730" width="344" height="112" rx="20" fill="#dcead3" stroke="#b8ccb0" stroke-width="2"/>
-  <rect x="390" y="756" width="296" height="58" rx="12" fill="url(#parking)" opacity=".8"/>
-  <text x="538" y="746" text-anchor="middle" font-family="Arial" font-size="18" font-weight="900" fill="#34443a">OVERFLOW PARKING</text>
-
-  <!-- BAFM office -->
-  <rect x="296" y="766" width="102" height="72" rx="16" fill="#f39a65" stroke="#c96c3a" stroke-width="2" filter="url(#softShadow)"/>
-  <text x="347" y="796" text-anchor="middle" font-family="Arial" font-size="18" font-weight="900" fill="#4a2415">BAFM</text>
-  <text x="347" y="818" text-anchor="middle" font-family="Arial" font-size="13" font-weight="800" fill="#4a2415">OFFICE</text>
-
-  <!-- Directional wedges / exits -->
-  <path d="M52 932 L78 988 L104 932 Z" fill="#c62f43"/>
-  <text x="78" y="919" text-anchor="middle" font-family="Arial" font-size="15" font-weight="800" fill="#9a2434">PUBLIC EXIT</text>
-
-  <path d="M322 936 L350 1000 L378 936 Z" fill="#cb4f4d"/>
-  <text x="350" y="926" text-anchor="middle" font-family="Arial" font-size="15" font-weight="800" fill="#8b2d31">GATE 75</text>
-
-  <path d="M610 930 L640 1000 L670 930 Z" fill="#c62f43"/>
-  <text x="640" y="916" text-anchor="middle" font-family="Arial" font-size="14" font-weight="800" fill="#8b2d31">VENDOR / CAMPER</text>
-
-  <!-- Decorative landscaping border -->
-  <g fill="#2d7b32">
-    <circle cx="24" cy="56" r="7"/><circle cx="24" cy="96" r="11"/><circle cx="24" cy="138" r="7"/>
-    <circle cx="24" cy="180" r="10"/><circle cx="24" cy="224" r="6"/><circle cx="24" cy="264" r="11"/>
-    <circle cx="24" cy="310" r="7"/><circle cx="24" cy="356" r="10"/><circle cx="24" cy="398" r="7"/>
-    <circle cx="24" cy="454" r="11"/><circle cx="24" cy="500" r="7"/><circle cx="24" cy="548" r="10"/>
-    <circle cx="24" cy="600" r="6"/><circle cx="24" cy="650" r="11"/><circle cx="24" cy="700" r="7"/>
-    <circle cx="24" cy="760" r="10"/><circle cx="24" cy="812" r="7"/><circle cx="24" cy="866" r="11"/>
-    <circle cx="24" cy="918" r="7"/>
-    <circle cx="728" cy="336" r="8"/><circle cx="728" cy="378" r="11"/><circle cx="728" cy="424" r="7"/>
-    <circle cx="728" cy="476" r="10"/><circle cx="728" cy="528" r="7"/><circle cx="728" cy="578" r="11"/>
-    <circle cx="728" cy="630" r="7"/><circle cx="728" cy="684" r="10"/><circle cx="728" cy="736" r="8"/>
+  <!-- Decorative pedestrian paths -->
+  <g fill="none" stroke="#c0c5bd" stroke-width="8" stroke-linecap="round" opacity=".8">
+    <path d="M428 304 Q514 276 602 286"/>
+    <path d="M684 405 Q744 373 790 349"/>
+    <path d="M496 451 Q560 430 640 442"/>
   </g>
 
   <!-- North arrow -->
-  <g transform="translate(686 18)">
-    <circle cx="24" cy="24" r="21" fill="#ffffff" opacity=".86" stroke="#9ca3af"/>
-    <path d="M24 8 L31 30 L24 25 L17 30 Z" fill="#374151"/>
-    <text x="24" y="49" text-anchor="middle" font-family="Arial" font-size="10" font-weight="800" fill="#374151">N</text>
+  <g transform="translate(1168 22)">
+    <circle cx="40" cy="40" r="34" fill="#fbfaf7" stroke="#b7b1a7" stroke-width="2"/>
+    <path d="M40 10 L51 52 L40 45 L29 52 Z" fill="#2a3137"/>
+    <text x="40" y="69" text-anchor="middle" font-family="Arial" font-size="14" font-weight="800" fill="#2a3137">N</text>
+  </g>
+
+  <!-- Scale -->
+  <g transform="translate(36 718)">
+    <path d="M0 0 H120" stroke="#4b535a" stroke-width="3"/>
+    <path d="M0 -5 V5 M60 -5 V5 M120 -5 V5" stroke="#4b535a" stroke-width="3"/>
+    <text x="60" y="22" text-anchor="middle" font-family="Arial" font-size="12" fill="#656d72">100 m</text>
   </g>
 </svg>
 `);
 
-const iconImage = (kind: 'tent' | 'car' | 'tree' | 'gate'): string => {
+const iconImage = (
+  kind: 'parking' | 'bus' | 'info' | 'atm' | 'restroom' | 'wheelchair' | 'gift' | 'post',
+): string => {
   const body = {
-    tent: `
-      <path d="M8 40 L36 8 L64 40 Z" fill="#4f7cac"/>
-      <path d="M36 8 L36 40 L64 40 Z" fill="#86a9d3"/>
-      <path d="M22 40 L31 26 L40 40 Z" fill="#f3e7c9"/>
-      <path d="M6 44 H66" stroke="#34465d" stroke-width="4" stroke-linecap="round"/>
-    `,
-    car: `
-      <path d="M9 38 L18 24 Q21 18 29 18 H47 Q54 18 58 24 L64 38 Z" fill="#d6534f"/>
-      <rect x="15" y="36" width="48" height="10" rx="5" fill="#7f1d1d"/>
-      <circle cx="21" cy="46" r="6" fill="#293241"/><circle cx="55" cy="46" r="6" fill="#293241"/>
-      <path d="M25 24 H48 L54 34 H20 Z" fill="#dbeafe"/>
-    `,
-    tree: `
-      <rect x="31" y="40" width="10" height="19" rx="4" fill="#7c4a27"/>
-      <circle cx="36" cy="30" r="21" fill="#2f7d32"/>
-      <circle cx="23" cy="35" r="14" fill="#3f8f3e"/>
-      <circle cx="49" cy="37" r="14" fill="#4a9b47"/>
-      <circle cx="35" cy="20" r="13" fill="#64ad58"/>
-    `,
-    gate: `
-      <path d="M10 50 L36 10 L62 50 Z" fill="#c2414c"/>
-      <path d="M24 40 H48" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-      <path d="M27 30 H45" stroke="#fff" stroke-width="4" stroke-linecap="round"/>
-    `,
+    parking: `
+      <text x="36" y="47" text-anchor="middle" font-family="Arial" font-size="42" font-weight="900" fill="#1668a8">P</text>`,
+    bus: `
+      <rect x="17" y="16" width="38" height="40" rx="8" fill="#1583be"/>
+      <rect x="22" y="23" width="28" height="16" rx="3" fill="#d9f0ff"/>
+      <circle cx="27" cy="51" r="4" fill="#24323b"/><circle cx="45" cy="51" r="4" fill="#24323b"/>`,
+    info: `
+      <circle cx="36" cy="36" r="20" fill="#1975ad"/>
+      <text x="36" y="48" text-anchor="middle" font-family="Georgia" font-size="38" font-weight="700" fill="#fff">i</text>`,
+    atm: `
+      <rect x="13" y="14" width="46" height="44" rx="8" fill="#55a94d"/>
+      <rect x="21" y="21" width="30" height="16" rx="3" fill="#e9f7e6"/>
+      <text x="36" y="50" text-anchor="middle" font-family="Arial" font-size="12" font-weight="900" fill="#fff">ATM</text>`,
+    restroom: `
+      <circle cx="36" cy="36" r="23" fill="#3e9d77"/>
+      <circle cx="28" cy="28" r="4" fill="#fff"/><circle cx="44" cy="28" r="4" fill="#fff"/>
+      <path d="M28 33 L28 49 M44 33 L44 49 M28 39 H44" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
+    wheelchair: `
+      <circle cx="36" cy="36" r="23" fill="#12a5d7"/>
+      <circle cx="42" cy="22" r="4" fill="#fff"/>
+      <circle cx="36" cy="47" r="10" fill="none" stroke="#fff" stroke-width="4"/>
+      <path d="M37 26 L31 38 L48 38 M31 38 L26 48" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
+    gift: `
+      <rect x="14" y="24" width="44" height="33" rx="5" fill="#2a7bb4"/>
+      <path d="M36 24 V57 M14 34 H58" stroke="#fff" stroke-width="3"/>
+      <path d="M36 24 C29 18 22 20 24 25 C26 28 31 26 36 24 C41 26 46 28 48 25 C50 20 43 18 36 24" fill="none" stroke="#fff" stroke-width="3"/>`,
+    post: `
+      <rect x="14" y="24" width="44" height="33" rx="5" fill="#2d6c9f"/>
+      <path d="M18 28 L36 44 L54 28 M18 53 L31 39 M54 53 L41 39" fill="none" stroke="#fff" stroke-width="3"/>`,
   }[kind];
 
   return svgDataUrl(`
     <svg xmlns="http://www.w3.org/2000/svg" width="72" height="72" viewBox="0 0 72 72">
-      <circle cx="36" cy="36" r="33" fill="#ffffff" opacity=".92" stroke="#cbd5e1" stroke-width="2"/>
+      <circle cx="36" cy="36" r="31" fill="#fff" opacity=".95" stroke="#c8cdd0" stroke-width="2"/>
       ${body}
     </svg>
   `);
 };
+
+const legendImage = (): string => svgDataUrl(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="430" height="250" viewBox="0 0 430 250">
+    <rect width="430" height="250" rx="20" fill="#f7f5ef" opacity=".96"/>
+    <rect x="2" y="2" width="426" height="246" rx="18" fill="none" stroke="#b9b3a9" stroke-width="2"/>
+    <text x="24" y="34" font-family="Georgia" font-size="24" font-weight="700" fill="#27684d">Neighborhoods</text>
+
+    <circle cx="30" cy="65" r="13" fill="#b7333f"/><text x="55" y="71" font-family="Arial" font-size="16" fill="#4d4f52">The Courtyard</text>
+    <circle cx="30" cy="99" r="13" fill="#147ab5"/><text x="55" y="105" font-family="Arial" font-size="16" fill="#4d4f52">Merchants Row</text>
+    <circle cx="30" cy="133" r="13" fill="#087c58"/><text x="55" y="139" font-family="Arial" font-size="16" fill="#4d4f52">Village Green</text>
+    <circle cx="30" cy="167" r="13" fill="#63ad42"/><text x="55" y="173" font-family="Arial" font-size="16" fill="#4d4f52">Upper Village Green</text>
+    <circle cx="30" cy="201" r="13" fill="#ec963d"/><text x="55" y="207" font-family="Arial" font-size="16" fill="#4d4f52">Wagon House Shops</text>
+
+    <line x1="255" y1="52" x2="255" y2="220" stroke="#d5d0c7" stroke-width="2"/>
+    <text x="278" y="73" font-family="Arial" font-size="13" font-weight="700" fill="#555b60">MAP SERVICES</text>
+    <circle cx="291" cy="102" r="11" fill="#2b7bb0"/><text x="284" y="108" font-family="Arial" font-size="13" font-weight="900" fill="#fff">P</text><text x="311" y="107" font-family="Arial" font-size="14" fill="#555b60">Parking</text>
+    <circle cx="291" cy="134" r="11" fill="#55a94d"/><text x="283" y="139" font-family="Arial" font-size="10" font-weight="900" fill="#fff">ATM</text><text x="311" y="139" font-family="Arial" font-size="14" fill="#555b60">ATM</text>
+    <circle cx="291" cy="166" r="11" fill="#3e9d77"/><text x="287" y="171" font-family="Arial" font-size="11" font-weight="900" fill="#fff">WC</text><text x="311" y="171" font-family="Arial" font-size="14" fill="#555b60">Restrooms</text>
+    <circle cx="291" cy="198" r="11" fill="#12a5d7"/><text x="284" y="203" font-family="Arial" font-size="11" font-weight="900" fill="#fff">♿</text><text x="311" y="203" font-family="Arial" font-size="14" fill="#555b60">Accessible</text>
+  </svg>
+`);
 
 const booth = (
   id: string,
@@ -201,20 +239,6 @@ const prop = (
   properties: { name, propColor: color, textVisible },
 });
 
-const textbox = (
-  id: string,
-  text: string,
-  x: number,
-  y: number,
-  width: number,
-  height: number,
-): Space => ({
-  id,
-  type: 'textbox',
-  geometry: { type: 'rectangle', x, y, width, height },
-  properties: { name: text },
-});
-
 const imageProp = (
   id: string,
   name: string,
@@ -230,6 +254,28 @@ const imageProp = (
   properties: { name, imageUrl },
 });
 
+const textbox = (
+  id: string,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  rotation?: number,
+): Space => ({
+  id,
+  type: 'textbox',
+  geometry: {
+    type: 'rectangle',
+    x,
+    y,
+    width,
+    height,
+    ...(rotation === undefined ? {} : { rotation }),
+  },
+  properties: { name: text },
+});
+
 const boothGrid = (
   prefix: string,
   label: string,
@@ -237,13 +283,22 @@ const boothGrid = (
   startY: number,
   columns: number,
   rows: number,
-  width = 52,
-  height = 30,
-  gapX = 6,
+  width = 48,
+  height = 28,
+  gapX = 7,
   gapY = 7,
   statusOffset = 0,
 ): Space[] => {
-  const statuses: SpaceStatus[] = ['available', 'reserved', 'booked', 'available', 'reserved'];
+  const statuses: SpaceStatus[] = [
+    'available',
+    'reserved',
+    'booked',
+    'available',
+    'reserved',
+    'unavailable',
+    'maintenance',
+  ];
+
   return Array.from({ length: columns * rows }, (_, index) => {
     const col = index % columns;
     const row = Math.floor(index / columns);
@@ -260,60 +315,88 @@ const boothGrid = (
 };
 
 export const TEST_SPACES: Space[] = [
-  // High-level vector/image backdrop. Individual booths and symbols remain
-  // interactive above it.
-  imageProp('site-backdrop', 'Event Site', 0, 0, 760, 1060, backdropImage()),
+  // ------------------------------------------------------------------------
+  // Illustrated site base
+  // ------------------------------------------------------------------------
+  imageProp('site-backdrop', 'Event Site', 0, 0, 1280, 760, siteBackdrop()),
 
-  // Image-based callouts/icons — these demonstrate where real PNG/SVG assets
-  // can replace simple vector props in production.
-  imageProp('icon-beverage', 'Beverage Tent', 166, 94, 72, 72, iconImage('tent')),
-  imageProp('icon-car-show', 'Car Show', 182, 554, 72, 72, iconImage('car')),
-  imageProp('icon-tree', 'Tree Landmark', 548, 300, 72, 72, iconImage('tree')),
-  imageProp('icon-gate', 'Gate 75', 314, 930, 72, 72, iconImage('gate')),
+  // ------------------------------------------------------------------------
+  // First-class map labels (standalone text boxes)
+  // ------------------------------------------------------------------------
+  textbox('title', 'RIVERSIDE MARKET • EVENT MAP', 38, 28, 320, 34),
+  textbox('wagon-label', 'WAGON HOUSE SHOPS', 110, 96, 240, 30, -10),
+  textbox('upper-green-label', 'UPPER VILLAGE GREEN', 468, 96, 250, 30),
+  textbox('courtyard-label', 'THE COURTYARD', 824, 208, 188, 30, 10),
+  textbox('village-green-label', 'VILLAGE GREEN', 520, 252, 190, 30),
+  textbox('merchants-label', 'MERCHANTS ROW', 828, 432, 175, 30, 12),
+  textbox('courtyard-lower-label', 'THE COURTYARD', 1020, 548, 100, 28, -6),
+  textbox('street-road-label', 'STREET ROAD', 1006, 288, 130, 26, 67),
+  textbox('pedllers-label', 'PEDDLERS LANE', 860, 322, 170, 26, 32),
 
-  // Examples for the new text controls:
-  prop('label-food', 'FOOD VENDORS', 62, 146, 192, 30, '#d8eff1', 'rounded-rectangle', true),
-  textbox('label-general-store', 'GENERAL STORE', 382, 144, 148, 34),
+  // ------------------------------------------------------------------------
+  // Neighborhood shop/booth clusters
+  // ------------------------------------------------------------------------
 
-  // ---- Food / Hall Blue --------------------------------------------------
-  ...boothGrid('blue', 'Blue', 58, 182, 3, 4, 52, 30, 7, 8, 0),
-  ...boothGrid('gold', 'Gold', 58, 336, 3, 3, 52, 30, 7, 8, 1),
-  ...boothGrid('red', 'Red', 58, 456, 3, 2, 52, 30, 7, 8, 2),
+  // Wagon House Shops — includes the six canonical A101-A106 dev fixtures.
+  booth('A101', 'Shop 101', 92, 116, 62, 34, 'available'),
+  booth('A102', 'Shop 102', 162, 116, 62, 34, 'reserved'),
+  booth('A103', 'Shop 103', 232, 116, 62, 34, 'booked'),
+  booth('A104', 'Shop 104', 302, 116, 62, 34, 'available'),
+  booth('A105', 'Shop 105', 92, 160, 62, 34, 'maintenance'),
+  booth('A106', 'Shop 106', 162, 160, 62, 34, 'reserved', 12),
+  ...boothGrid('wagon', 'Shop', 232, 160, 2, 2, 62, 34, 8, 10, 1),
 
-  // General Store
-  ...boothGrid('store', 'Store', 390, 180, 2, 4, 58, 31, 8, 8, 1),
+  // Upper Village Green.
+  ...boothGrid('upper', 'Shop', 474, 126, 3, 2, 64, 34, 8, 12, 2),
+  ...boothGrid('upper-low', 'Shop', 536, 206, 2, 1, 64, 34, 8, 12, 0),
 
-  // ---- Camp 3 -----------------------------------------------------------
-  ...boothGrid('camp3', 'Camp 3', 502, 374, 3, 2, 57, 30, 7, 9, 0),
+  // Central Village Green.
+  ...boothGrid('village', 'Shop', 546, 330, 3, 2, 62, 34, 8, 10, 0),
+  ...boothGrid('village-east', 'Shop', 694, 374, 2, 2, 62, 34, 8, 10, 2),
 
-  // ---- Camp 2 -----------------------------------------------------------
-  ...boothGrid('camp2', 'Camp 2', 502, 552, 3, 4, 57, 30, 7, 9, 1),
+  // Merchants Row.
+  ...boothGrid('merchant', 'Shop', 836, 452, 2, 4, 62, 34, 9, 9, 1),
 
-  // ---- Car sales / show -------------------------------------------------
-  ...boothGrid('cars', 'Car', 54, 646, 3, 2, 54, 31, 8, 8, 0),
+  // The Courtyard.
+  ...boothGrid('court', 'Shop', 1028, 574, 3, 3, 60, 34, 7, 8, 2),
+  booth('court-10', 'Shop 10', 1172, 590, 56, 34, 'available'),
+  booth('court-11', 'Shop 11', 1172, 634, 56, 34, 'reserved'),
+  booth('court-12', 'Shop 12', 1172, 678, 56, 34, 'booked'),
 
-  // ---- Arts Park ---------------------------------------------------------
-  ...boothGrid('arts', 'Arts', 54, 772, 3, 1, 54, 30, 8, 0, 1),
+  // ------------------------------------------------------------------------
+  // Service / POI image props
+  // ------------------------------------------------------------------------
+  imageProp('poi-parking-1', 'Parking', 136, 228, 58, 58, iconImage('parking')),
+  imageProp('poi-parking-2', 'Parking', 1064, 208, 58, 58, iconImage('parking')),
+  imageProp('poi-parking-3', 'Parking', 310, 598, 58, 58, iconImage('parking')),
+  imageProp('poi-bus', 'Bus Parking', 1098, 306, 58, 58, iconImage('bus')),
+  imageProp('poi-info', 'Guest Services', 742, 244, 58, 58, iconImage('info')),
+  imageProp('poi-atm', 'ATM', 354, 120, 58, 58, iconImage('atm')),
+  imageProp('poi-restroom', 'Rest Rooms', 444, 392, 58, 58, iconImage('restroom')),
+  imageProp('poi-wheelchair', 'Wheelchair Accessible', 804, 468, 58, 58, iconImage('wheelchair')),
+  imageProp('poi-gift', 'Gift Cards', 930, 626, 58, 58, iconImage('gift')),
+  imageProp('poi-post', 'Post Office', 1048, 428, 58, 58, iconImage('post')),
 
-  // ---- Overflow parking detail ------------------------------------------
-  prop('parking-a', 'Parking aisle A', 392, 780, 288, 6, '#83929d', 'line'),
-  prop('parking-b', 'Parking aisle B', 392, 806, 288, 6, '#83929d', 'line'),
-  prop('parking-c', 'Parking aisle C', 392, 832, 288, 6, '#83929d', 'line'),
+  // ------------------------------------------------------------------------
+  // Demonstration prop with text visibility enabled.
+  // ------------------------------------------------------------------------
+  prop('featured-fountain', 'FOUNTAIN', 592, 292, 74, 28, '#176f7f', 'rounded-rectangle', true),
 
-  // Lower landscaping and separators
-  prop('walkway-east', 'East footpath', 712, 335, 6, 510, '#86a38a', 'line'),
-  prop('walkway-west', 'West footpath', 25, 80, 6, 790, '#86a38a', 'line'),
+  // Decorative map symbols / landscaping.
+  prop('garden-1', 'Tree', 420, 322, 18, 18, '#2d7c3d', 'circle'),
+  prop('garden-2', 'Tree', 455, 344, 22, 22, '#3f8f3e', 'circle'),
+  prop('garden-3', 'Tree', 720, 300, 18, 18, '#2d7c3d', 'circle'),
+  prop('garden-4', 'Tree', 755, 326, 24, 24, '#4b9c47', 'circle'),
+  prop('garden-5', 'Tree', 478, 420, 22, 22, '#3f8f3e', 'circle'),
+  prop('garden-6', 'Tree', 716, 432, 22, 22, '#3f8f3e', 'circle'),
 
-  // A few marker shapes for renderer coverage.
-  prop('marker-1', 'Info marker', 365, 715, 22, 22, '#0f766e', 'circle'),
-  prop('marker-2', 'Parking marker', 392, 720, 22, 22, '#2563eb', 'diamond'),
-  prop('marker-3', 'Service marker', 421, 716, 30, 16, '#7c3aed', 'ellipse'),
+  // Small landmark markers.
+  prop('market-marker', 'Market Marker', 392, 286, 24, 24, '#8b5cf6', 'diamond'),
+  prop('park-marker', 'Park Marker', 774, 350, 24, 24, '#14b8a6', 'diamond'),
+  prop('gate-marker', 'Main Gate', 536, 704, 34, 34, '#b7333f', 'triangle'),
 
-  // Real interactive bottom facilities.
-  booth('office-01', 'BAFM Office', 304, 778, 92, 42, 'available'),
-  booth('gate-75', 'Gate 75', 304, 934, 92, 34, 'reserved'),
-  booth('vendor-entry-01', 'Vendor Entry', 570, 934, 108, 34, 'available'),
-
-  // A rotated booth keeps the edit/rotation tool exercised on the realistic map.
-  booth('A106', 'Blue 6', 170, 372, 52, 30, 'reserved', 12),
+  // ------------------------------------------------------------------------
+  // Illustrated legend
+  // ------------------------------------------------------------------------
+  imageProp('legend', 'Neighborhood Legend', 920, 28, 322, 186, legendImage()),
 ];
