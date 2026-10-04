@@ -696,6 +696,9 @@ export class SpaceRenderer {
       style: {
         fontSize: 12,
         fill: LABEL_COLOR,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontWeight: '600',
+        resolution: Math.min((window.devicePixelRatio || 1) * 2, 3),
         stroke: { color: LABEL_OUTLINE_COLOR, width: 3 },
         align: 'center',
       },
@@ -1204,6 +1207,17 @@ export class SpaceRenderer {
     shape.fill({ color, alpha: 1 });
   }
 
+  private getReadableTextColor(explicitColor: unknown, background: number): number {
+    if (typeof explicitColor === 'string' && /^[#0-9a-fA-F]/.test(explicitColor.trim())) {
+      return LABEL_COLOR;
+    }
+    const r = (background >> 16) & 0xff;
+    const g = (background >> 8) & 0xff;
+    const b = background & 0xff;
+    const luminance = (0.299 * r) + (0.587 * g) + (0.114 * b);
+    return luminance > 175 ? 0x111827 : 0xffffff;
+  }
+
   /** Shows important labels at a readable screen size with simple LOD. */
   private updateLabel(entry: SpaceNode, space: Space): void {
     const { width, height } = space.geometry;
@@ -1250,17 +1264,23 @@ export class SpaceRenderer {
       : (screenWidth < 76 ? 12 : 15);
 
     entry.label.style.fontSize = targetScreenFont / zoom;
+    const defaultTextColor = showTextboxText
+      ? 0x243039
+      : this.getReadableTextColor(
+          space.properties.displayTextColor,
+          this.statusStyles[space.properties.status ?? '']?.fill ?? LABEL_COLOR,
+        );
     const textColor = this.parsePropColor(
       space.properties.displayTextColor,
-      showTextboxText ? 0x243039 : LABEL_COLOR,
+      defaultTextColor,
     );
     const outlineColor = this.parsePropColor(
       space.properties.displayTextOutlineColor,
-      showTextboxText ? 0xffffff : LABEL_OUTLINE_COLOR,
+      showTextboxText ? 0xffffff : 0xffffff,
     );
     const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
       ? 0
-      : Math.min(2.5, showTextboxText ? 1.4 / zoom : 1.0 / zoom);
+      : Math.min(1.6, showTextboxText ? 1.0 / zoom : 0.7 / zoom);
 
     entry.label.style.fill = textColor;
     entry.label.style.stroke = { color: outlineColor, width: outlineWidth };
