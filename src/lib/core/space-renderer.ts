@@ -1,4 +1,5 @@
 import {
+  BlurFilter,
   Circle,
   Container,
   FederatedPointerEvent,
@@ -65,6 +66,9 @@ const FILTER_GLASS_INNER_RIM_ALPHA = 0.30;
 const FILTER_GLASS_DARK_RIM_COLOR = 0x8ea5bf;
 const FILTER_GLASS_DARK_RIM_ALPHA = 0.22;
 const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
+
+/** Very light content blur used only on booths receded by an active filter. */
+const FILTER_CONTENT_BLUR = 0.9;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
@@ -159,6 +163,10 @@ interface SpaceNode {
 export class SpaceRenderer {
   private readonly spaceNodes = new Map<string, SpaceNode>();
   private readonly spaceData = new Map<string, Space>();
+  private readonly contentBlurFilter = new BlurFilter({
+    strength: FILTER_CONTENT_BLUR,
+    quality: 2,
+  });
   private statusStyles: StatusStyleMap = DEFAULT_STATUS_STYLES;
 
   private hoveredId: string | null = null;
@@ -473,8 +481,9 @@ export class SpaceRenderer {
       const isSelected = this.selectedIds.has(id);
       const recede = this.shouldRecede(id);
 
-      // No blur/backdrop filter: the glass is purely the drawn overlay.
-      entry.node.filters = [];
+      // Keep the liquid-glass overlay crisp, while the booth's own content
+      // (including its name) recedes softly behind it.
+      this.applyContentFocus(entry, recede);
       entry.node.alpha = 1;
       entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
       entry.glass.visible = recede;
@@ -686,6 +695,7 @@ export class SpaceRenderer {
 
     this.updateImage(entry, space);
     this.updateLabel(entry, space);
+    this.applyContentFocus(entry, this.shouldRecede(space.id));
     this.drawGlass(entry.glass, geometry); // visibility is set by updateFocusEffect()
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
@@ -716,6 +726,23 @@ export class SpaceRenderer {
   }
 
   /** Draws a liquid-glass surface over booths receded by an active filter. */
+  /**
+   * Applies focus to booth content only. The liquid-glass overlay stays
+   * crisp, while the fill/image/label recede together.
+   */
+  private applyContentFocus(entry: SpaceNode, recede: boolean): void {
+    const filters = recede ? [this.contentBlurFilter] : [];
+
+    entry.shape.filters = filters;
+    entry.label.filters = filters;
+    entry.checkBadge.filters = filters;
+    entry.handle.filters = filters;
+
+    if (entry.image) {
+      entry.image.sprite.filters = filters;
+    }
+  }
+
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
 
