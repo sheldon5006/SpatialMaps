@@ -12,19 +12,29 @@ export type SpaceStatus =
   | 'maintenance'
   | 'selected';
 
-export interface RectangleGeometry {
-  type: 'rectangle';
+interface BaseGeometry {
   x: number;
   y: number;
   width: number;
   height: number;
-  /** Degrees, clockwise, around the rectangle's center. */
+  /** Degrees, clockwise, around the geometry's center. */
   rotation?: number;
 }
 
-// Future geometry kinds (polygon, circle) join this union without
-// touching code that only cares about "a space has geometry".
-export type SpaceGeometry = RectangleGeometry;
+export interface RectangleGeometry extends BaseGeometry {
+  type: 'rectangle';
+}
+
+export interface CircleGeometry extends BaseGeometry {
+  type: 'circle';
+}
+
+export interface EllipseGeometry extends BaseGeometry {
+  type: 'ellipse';
+}
+
+/** Basic vector shapes supported by the editor. */
+export type SpaceGeometry = RectangleGeometry | CircleGeometry | EllipseGeometry;
 
 export interface SpaceProperties {
   name?: string;
