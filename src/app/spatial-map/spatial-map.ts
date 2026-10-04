@@ -143,15 +143,38 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <button [class.active]="mode() === 'view'" (click)="setMode('view')">View</button>
           <button [class.active]="mode() === 'edit'" (click)="setMode('edit')">Edit</button>
         </div>
-        <div class="mode-switch">
-          <button [class.active]="visualFilter() === 'all'" (click)="setVisualFilter('all')">All</button>
-          @for (status of statusOptions; track status) {
-            <button
-              [class.active]="visualFilter() === status"
-              (click)="setVisualFilter(status)"
-            >
-              {{ statusMeta[status].label }}
-            </button>
+        <div class="status-filter-control">
+          <button
+            class="filter-all-btn"
+            [class.active]="visualFilter() === 'all'"
+            (click)="setVisualFilter('all')"
+          >All</button>
+
+          @if (useStatusDropdown) {
+            <div class="toolbar-select-shell">
+              <select
+                [(ngModel)]="statusFilterSelection"
+                (ngModelChange)="setVisualFilter($event)"
+                aria-label="Filter by status"
+              >
+                <option value="">Filter by status</option>
+                @for (status of statusDefinitions; track status.key) {
+                  <option [value]="status.key">{{ status.label }}</option>
+                }
+              </select>
+            </div>
+          } @else {
+            <div class="mode-switch">
+              @for (status of statusDefinitions; track status.key) {
+                <button
+                  [class.active]="visualFilter() === status.key"
+                  (click)="setVisualFilter(status.key)"
+                >
+                  <span class="status-dot" [style.background]="status.color"></span>
+                  {{ status.label }}
+                </button>
+              }
+            </div>
           }
         </div>
         <button
@@ -219,6 +242,58 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
                 <button class="preset-btn" (click)="resetViewZoom()">Reset to base</button>
               </div>
               <small class="settings-help">View mode will never zoom below the readable minimum.</small>
+            </div>
+
+            <div class="settings-section">
+              <div class="settings-section-heading">
+                <span class="settings-label">Space statuses</span>
+                <span class="settings-count">{{ statusCount }}</span>
+              </div>
+
+              <div class="status-list">
+                @for (status of statusDefinitions; track status.key) {
+                  <div class="status-row">
+                    <span class="status-dot large" [style.background]="status.color"></span>
+                    <div class="status-row-main">
+                      <strong>{{ status.label }}</strong>
+                      <small>{{ status.key }}</small>
+                    </div>
+                    <input
+                      class="status-color-input"
+                      type="color"
+                      [ngModel]="status.color"
+                      (ngModelChange)="updateStatusColor(status.key, $event)"
+                      [attr.aria-label]="'Color for ' + status.label"
+                    />
+                    <button
+                      type="button"
+                      class="status-remove-btn"
+                      [disabled]="isStatusInUse(status.key)"
+                      [title]="isStatusInUse(status.key) ? 'Status is assigned to a space' : 'Remove status'"
+                      (click)="removeStatus(status.key)"
+                    >×</button>
+                  </div>
+                }
+              </div>
+
+              <div class="status-add-row">
+                <input
+                  type="text"
+                  [(ngModel)]="newStatusLabel"
+                  placeholder="Add status, e.g. Pending"
+                  (keydown.enter)="addStatus()"
+                />
+                <input
+                  class="status-color-input"
+                  type="color"
+                  [(ngModel)]="newStatusColor"
+                  aria-label="New status color"
+                />
+                <button type="button" class="preset-btn" (click)="addStatus()">Add</button>
+              </div>
+              <small class="settings-help">
+                Status color controls booth background. All and Selected only are map controls.
+              </small>
             </div>
 
             @if (mode() === 'edit') {
@@ -387,11 +462,13 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         @if (form.elementType !== 'textbox') {
           <label class="field">
             <span>Status</span>
-            <select [(ngModel)]="form.status">
-              @for (status of statusOptions; track status) {
-                <option [value]="status">{{ status }}</option>
-              }
-            </select>
+            <div class="select-shell">
+              <select [(ngModel)]="form.status">
+                @for (status of statusDefinitions; track status.key) {
+                  <option [value]="status.key">{{ status.label }}</option>
+                }
+              </select>
+            </div>
           </label>
         }
 
