@@ -122,7 +122,7 @@ function defaultFormState(): SpaceFormState {
  *  the toolbar no longer overlaps the canvas at all (it's a real header
  *  now) — so only the drawer needs accounting for here. */
 const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
-const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
+const MAP_VIEW_PADDING = { top: 24, right: 24, bottom: 24, left: 24 };
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
@@ -1721,7 +1721,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       // minimum so the whole venue remains visible.
       this.engine.camera.fitBounds(undefined, {
         duration: 0,
-        padding: SEARCH_PANEL_PADDING,
+        padding: MAP_VIEW_PADDING,
       });
       // The overview is a browsing start point, not a tiny architectural
       // thumbnail. Center first, then move to the configured readable base.
@@ -2076,7 +2076,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     // Keep the target booth in the visible map area rather than centering it
     // underneath the persistent search panel.
     this.engine.camera.fitBounds([id], {
-      padding: SEARCH_PANEL_PADDING,
+      padding: MAP_VIEW_PADDING,
       maxZoom: 1.8,
       duration: 450,
     });
