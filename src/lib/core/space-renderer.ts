@@ -1571,7 +1571,7 @@ export class SpaceRenderer {
     const strength = Math.max(0, Math.min(1, intensity));
     const radius = Math.min(14, Math.max(5, minSide * 0.12));
 
-    const inset = 1.2;
+    const inset = 0.25;
     const points: Array<{ x: number; y: number }> = [];
     const addLine = (
       ax: number,
@@ -1675,14 +1675,12 @@ export class SpaceRenderer {
 
     if (loop.length < 2 || perimeter <= 0) return;
 
-    // Rope/tape construction: each italic segment slightly overlaps the
-    // next one, so the colors read as a connected braided strip rather than
-    // separate floating dashes.
-    // Continuous rope/tape construction. A metallic-grey base strand runs
-    // around the entire perimeter, with a neon-ink blue strand seated into it.
-    // Short overlapping wraps create the twisted-rope appearance with no gaps.
-    const ropeWidth = Math.max(2.2, Math.min(3.4, minSide * 0.028));
-    const innerWidth = ropeWidth * 0.62;
+    // Thick rope/tape construction: the perimeter is covered by a solid
+    // two-tone strand so the booth edge is visually consumed by the effect.
+    // Navy is the dominant body color; metal-grey sits inside it as the
+    // contrasting strand, with short diagonal wraps moving around the loop.
+    const ropeWidth = Math.max(3.8, Math.min(5.0, minSide * 0.040));
+    const innerWidth = ropeWidth * 0.64;
 
     // Continuous metallic strand — this is the part that removes any visual gap.
     for (let i = 0; i < loop.length; i += 1) {
@@ -1692,8 +1690,8 @@ export class SpaceRenderer {
       rope.lineTo(b.x, b.y);
     }
     rope.stroke({
-      color: 0xb9bec6,
-      alpha: 0.96 * strength,
+      color: 0x183a5a,
+      alpha: 1.0 * strength,
       width: ropeWidth,
       cap: 'round',
       join: 'round',
@@ -1708,8 +1706,8 @@ export class SpaceRenderer {
       rope.lineTo(b.x, b.y);
     }
     rope.stroke({
-      color: 0x00efff,
-      alpha: 0.98 * strength,
+      color: 0xc7ccd2,
+      alpha: 1.0 * strength,
       width: innerWidth,
       cap: 'round',
       join: 'round',
@@ -1718,8 +1716,8 @@ export class SpaceRenderer {
     // Wrapped bands: dense, overlapping italic bands visually fuse the two
     // strands into one braided/tape-like loop. Each band overlaps its
     // neighbors, so there is no exposed gap between units.
-    const wrapPitch = Math.max(5, Math.min(7.5, minSide * 0.07));
-    const wrapLength = wrapPitch * 1.18;
+    const wrapPitch = Math.max(4.5, Math.min(6.2, minSide * 0.060));
+    const wrapLength = wrapPitch * 1.24;
     const wrapCount = Math.max(12, Math.ceil(perimeter / wrapPitch));
 
     for (let index = 0; index < wrapCount; index += 1) {
@@ -1762,9 +1760,9 @@ export class SpaceRenderer {
       rope.moveTo(x1, y1);
       rope.lineTo(x2, y2);
       rope.stroke({
-        color: index % 2 === 0 ? 0x00efff : 0xdfe3e8,
-        alpha: 0.98 * strength,
-        width: Math.max(1.5, ropeWidth * 0.72),
+        color: index % 2 === 0 ? 0x183a5a : 0xd5d9de,
+        alpha: 1.0 * strength,
+        width: Math.max(2.1, ropeWidth * 0.70),
         cap: 'round',
       });
     }
