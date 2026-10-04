@@ -78,6 +78,11 @@ export interface SpaceProperties {
   imageUrl?: string;
   /** Shows the stored name as visible text on a prop when enabled. */
   textVisible?: boolean;
+  /** Optional per-element visual overrides for cartographic fixtures/themes. */
+  displayColor?: string;
+  displayStrokeColor?: string;
+  displayTextColor?: string;
+  displayTextOutlineColor?: string;
   [key: string]: unknown;
 }
 
