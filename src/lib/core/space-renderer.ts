@@ -1688,10 +1688,10 @@ export class SpaceRenderer {
     for (let i = 0; i < loop.length; i += 1) {
       const a = loop[i];
       const b = loop[(i + 1) % loop.length];
-      highlight.moveTo(a.x, a.y);
-      highlight.lineTo(b.x, b.y);
+      rope.moveTo(a.x, a.y);
+      rope.lineTo(b.x, b.y);
     }
-    highlight.stroke({
+    rope.stroke({
       color: 0xb9bec6,
       alpha: 0.96 * strength,
       width: ropeWidth,
@@ -1704,10 +1704,10 @@ export class SpaceRenderer {
     for (let i = 0; i < loop.length; i += 1) {
       const a = loop[i];
       const b = loop[(i + 1) % loop.length];
-      highlight.moveTo(a.x, a.y);
-      highlight.lineTo(b.x, b.y);
+      rope.moveTo(a.x, a.y);
+      rope.lineTo(b.x, b.y);
     }
-    highlight.stroke({
+    rope.stroke({
       color: 0x00efff,
       alpha: 0.98 * strength,
       width: innerWidth,
@@ -1759,9 +1759,9 @@ export class SpaceRenderer {
       const x2 = cx + tangentX * along + normalX * across;
       const y2 = cy + tangentY * along + normalY * across;
 
-      highlight.moveTo(x1, y1);
-      highlight.lineTo(x2, y2);
-      highlight.stroke({
+      rope.moveTo(x1, y1);
+      rope.lineTo(x2, y2);
+      rope.stroke({
         color: index % 2 === 0 ? 0x00efff : 0xdfe3e8,
         alpha: 0.98 * strength,
         width: Math.max(1.5, ropeWidth * 0.72),
