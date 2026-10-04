@@ -21,7 +21,6 @@ import {
 
 const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
-const SELECTED_STROKE_WIDTH = 3;
 const SELECTED_COLOR = 0x3498db;
 
 const CHECK_BADGE_RADIUS = 8;
@@ -72,9 +71,15 @@ const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
 /** Very light content blur used only on booths receded by an active filter. */
 const FILTER_CONTENT_BLUR = 0.9;
 
-/** Selection gets a slight lift — a small scale-up reads as "raised toward
- *  you", reinforcing the highlight beyond just the outline color. */
-const SELECTED_SCALE = 1.04;
+/** Selected booths settle a fraction inward, like a pressed modern control. */
+const SELECTED_SCALE = 0.985;
+
+// Monochrome neumorphic locator: depth only — no hue, glow, or luminous accent.
+const SEARCH_HIGHLIGHT_SHADOW_COLOR = 0x111827;
+const SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR = 0x020617;
+
+const PRESS_ANIMATION_DURATION_MS = 220;
+const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x111827;
 
 export interface CameraSnapshot {
   x: number;
@@ -146,6 +151,12 @@ interface SpaceNode {
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
+  /** Persistent navy/metal rope shown for selected/search matches. */
+  searchHighlight: Graphics;
+  /** Temporary black/blue rope shown only during fly-to focus. */
+  focusHighlight: Graphics;
+  /** Separate physical cast shadow so it never tints/dims the booth itself. */
+  pressShadow: Graphics;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -178,7 +189,16 @@ export class SpaceRenderer {
 
   private hoveredId: string | null = null;
   private focusedId: string | null = null;
+  private readonly searchHighlightedIds = new Set<string>();
+  private readonly focusHighlightedIds = new Set<string>();
+  private focusHighlightUntil = 0;
+  private focusHighlightStartedAt = 0;
+  private focusHighlightColor = DEFAULT_FOCUS_HIGHLIGHT_COLOR;
   private readonly selectedIds = new Set<string>();
+  /** One-shot press/release transitions. No looping pulse or glow animation. */
+  private readonly pressAnimations = new Map<string, { progress: number; target: number }>();
+  /** Continuous phase for the thin two-color perimeter rope animation. */
+  private highlightRopePhase = 0;
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
   private mode: MapMode = 'view';
@@ -235,6 +255,7 @@ export class SpaceRenderer {
         const space = this.spaceData.get(id);
         if (!space || !this.isSelectable(space)) {
           this.selectedIds.delete(id);
+          this.startPressTransition(id, false);
           invalidated.push(id);
         }
       }
@@ -335,6 +356,213 @@ export class SpaceRenderer {
     this.events.emit('focus', id);
   }
 
+  /**
+   * Marks all current search matches with the persistent search locator.
+   * Search matching is independent from selection and business status.
+   */
+  setSearchHighlights(ids: string[]): void {
+    const next = new Set(ids);
+    const affected = new Set<string>([
+      ...this.searchHighlightedIds,
+      ...next,
+    ]);
+
+    affected.forEach((id) => {
+      const wasHighlighted = this.searchHighlightedIds.has(id);
+      const willBeHighlighted = next.has(id);
+      if (wasHighlighted !== willBeHighlighted) {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || willBeHighlighted || this.focusHighlightedIds.has(id),
+        );
+      }
+    });
+
+    this.searchHighlightedIds.clear();
+    next.forEach((id) => this.searchHighlightedIds.add(id));
+    affected.forEach((id) => this.repaint(id));
+  }
+
+  /** Backwards-compatible single-search API. */
+  setSearchHighlight(id: string | null): void {
+    this.setSearchHighlights(id ? [id] : []);
+  }
+
+  /**
+   * Temporarily focuses multiple spaces while a navigation/fly-to operation
+   * is taking place. Every target receives the temporary fly-to rope.
+   */
+  focusSpaces(
+    ids: string[],
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    const next = new Set(ids);
+
+    this.focusHighlightedIds.forEach((id) => {
+      if (!next.has(id)) {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || this.searchHighlightedIds.has(id),
+        );
+      }
+    });
+
+    this.focusHighlightedIds.clear();
+    next.forEach((id) => {
+      this.focusHighlightedIds.add(id);
+      this.startPressTransition(id, true);
+    });
+
+    this.focusHighlightStartedAt = performance.now();
+    this.focusHighlightUntil = performance.now() + Math.max(0, options?.durationMs ?? 2000);
+    this.focusHighlightColor = this.parsePropColor(
+      options?.color,
+      DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+    );
+
+    next.forEach((id) => this.repaint(id));
+  }
+
+  /** Backwards-compatible single-space API. */
+  focusSpace(
+    id: string,
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.focusSpaces([id], options);
+  }
+
+  /** Advances one-shot pressed-state transitions. There is no looping glow/pulse. */
+  tick(deltaMS: number): void {
+    const now = performance.now();
+    const focusRemaining = this.focusHighlightedIds.size > 0
+      ? this.focusHighlightUntil - now
+      : 0;
+    const focusWasActive = focusRemaining > 0;
+
+    if (this.focusHighlightedIds.size > 0 && !focusWasActive) {
+      const expired = Array.from(this.focusHighlightedIds);
+      this.focusHighlightedIds.clear();
+      this.focusHighlightUntil = 0;
+      this.focusHighlightStartedAt = 0;
+
+      expired.forEach((id) => {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || this.searchHighlightedIds.has(id),
+        );
+      });
+    }
+
+    const activeIds = new Set<string>();
+    this.searchHighlightedIds.forEach((id) => activeIds.add(id));
+    if (focusWasActive) {
+      this.focusHighlightedIds.forEach((id) => activeIds.add(id));
+    }
+    this.selectedIds.forEach((id) => activeIds.add(id));
+
+    if (activeIds.size === 0 && this.pressAnimations.size === 0) return;
+
+    // Keep the rope movement calm. The visible effect should read like a
+    // slow braided/tape loop rather than a stream of fast dashes.
+    this.highlightRopePhase = (this.highlightRopePhase + deltaMS * 0.014) % 1;
+
+    const animatedIds = new Set<string>([
+      ...Array.from(this.pressAnimations.keys()),
+      ...Array.from(activeIds),
+    ]);
+    animatedIds.forEach((id) => {
+      const animation = this.pressAnimations.get(id);
+      const entry = this.spaceNodes.get(id);
+      const space = this.spaceData.get(id);
+      if (!entry || !space) {
+        if (animation) this.pressAnimations.delete(id);
+        return;
+      }
+
+      let press = animation?.progress ??
+        (activeIds.has(id) ? 1 : 0);
+
+      if (animation) {
+        const frame = Math.max(0, Math.min(1, deltaMS / PRESS_ANIMATION_DURATION_MS));
+        const eased = 1 - Math.pow(1 - frame, 3);
+        animation.progress += (animation.target - animation.progress) * eased;
+        press = animation.progress;
+
+        if (Math.abs(animation.target - animation.progress) < 0.001) {
+          animation.progress = animation.target;
+          press = animation.progress;
+          this.pressAnimations.delete(id);
+        }
+      }
+
+      const isSearch = this.searchHighlightedIds.has(id);
+      const isFocus = this.focusHighlightedIds.has(id) && focusWasActive;
+      const isSelected = this.selectedIds.has(id);
+      const visible = isSelected || isSearch || isFocus;
+
+      // Fly-to rope remains fully visible for its complete configured duration;
+      // the timer removes the temporary focus state.
+      const focusIntensity = 1;
+
+      this.drawPressShadow(
+        entry.pressShadow,
+        space.geometry,
+        press,
+        visible,
+        focusIntensity,
+      );
+
+      // Persistent search/selection rope. During fly-to focus it yields to the
+      // temporary black/blue rope, making the timer visually unambiguous.
+      this.drawPerimeterRope(
+        entry.searchHighlight,
+        space.geometry,
+        !isFocus && (isSelected || isSearch),
+        1,
+        this.highlightRopePhase,
+        0x183a5a,
+        0xd5d9de,
+      );
+
+      this.drawPerimeterRope(
+        entry.focusHighlight,
+        space.geometry,
+        isFocus,
+        1,
+        this.highlightRopePhase,
+        0x000000,
+        0x00b7ff,
+      );
+
+      // Explicit visibility split: the temporary fly-to layer is removed
+      // exactly when the timer ends, while search/selection remains separate.
+      entry.focusHighlight.visible = isFocus;
+      entry.searchHighlight.visible = !isFocus && (isSelected || isSearch);
+      entry.pressShadow.visible = visible;
+
+      // Keep the tiny physical press only while the one-shot transition runs.
+      // Once settled, selected/search-highlighted spaces stay still while
+      // the perimeter rope continues its calm loop.
+      entry.node.scale.set(
+        1 - (1 - SELECTED_SCALE) * press,
+      );
+    });
+  }
+
+  /** Starts a single smooth press/release transition. Reaching rest removes
+   * the animation state, so a selected booth stays visually still. */
+  private startPressTransition(id: string, pressed: boolean): void {
+    const current = this.pressAnimations.get(id)?.progress ??
+      ((this.selectedIds.has(id) ||
+        this.searchHighlightedIds.has(id) ||
+        this.focusHighlightedIds.has(id)) ? 1 : 0);
+
+    this.pressAnimations.set(id, {
+      progress: current,
+      target: pressed ? 1 : 0,
+    });
+  }
+
   getSpaceCount(): number {
     return this.spaceData.size;
   }
@@ -363,6 +591,9 @@ export class SpaceRenderer {
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
+    this.searchHighlightedIds.clear();
+    this.focusHighlightedIds.clear();
+    this.pressAnimations.clear();
     this.hoveredId = null;
 
     this.world.addChild(this.grid);
@@ -487,6 +718,7 @@ export class SpaceRenderer {
 
     if (!selected) {
       this.selectedIds.delete(id);
+      this.startPressTransition(id, false);
       this.repaint(id);
       this.updateFocusEffect();
       this.events.emit('select', Array.from(this.selectedIds));
@@ -502,8 +734,13 @@ export class SpaceRenderer {
       this.selectedIds.clear();
       this.selectedIds.add(id);
 
-      // Repaint the old selection so its selection ring/badge disappears.
-      previouslySelected.forEach((selectedId) => this.repaint(selectedId));
+      // Repaint the old selection so its selection ring/badge disappears and
+      // start a smooth release/press transition for both.
+      previouslySelected.forEach((selectedId) => {
+        this.startPressTransition(selectedId, false);
+        this.repaint(selectedId);
+      });
+      this.startPressTransition(id, true);
       this.repaint(id);
       this.updateFocusEffect();
       this.events.emit('select', Array.from(this.selectedIds));
@@ -515,6 +752,7 @@ export class SpaceRenderer {
     if (!this.isSelectable(space)) return;
 
     this.selectedIds.add(id);
+    this.startPressTransition(id, true);
     this.repaint(id);
     this.updateFocusEffect();
     this.events.emit('select', Array.from(this.selectedIds));
@@ -524,7 +762,10 @@ export class SpaceRenderer {
     if (this.selectedIds.size === 0) return;
     const previouslySelected = Array.from(this.selectedIds);
     this.selectedIds.clear();
-    previouslySelected.forEach((id) => this.repaint(id));
+    previouslySelected.forEach((id) => {
+      this.startPressTransition(id, false);
+      this.repaint(id);
+    });
     this.updateFocusEffect();
     this.events.emit('select', []);
   }
@@ -576,7 +817,13 @@ export class SpaceRenderer {
       // (including its name) recedes softly behind it.
       this.applyContentFocus(entry, recede);
       entry.node.alpha = 1;
-      entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
+      // The selected control itself eases into the pressed scale while the
+      // cast shadow deepens. On deselection the same transition reverses.
+      const press = this.pressAnimations.get(id)?.progress ??
+        (isSelected ? 1 : 0);
+      entry.node.scale.set(isSelected
+        ? 1 - (1 - SELECTED_SCALE) * press
+        : 1 - (1 - SELECTED_SCALE) * press);
       entry.glass.visible = recede;
     });
   }
@@ -650,6 +897,7 @@ export class SpaceRenderer {
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
+    this.pressAnimations.clear();
     this.hoveredId = null;
     this.focusedId = null;
   }
@@ -675,6 +923,8 @@ export class SpaceRenderer {
       style: {
         fontSize: 12,
         fill: LABEL_COLOR,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontWeight: '600',
         stroke: { color: LABEL_OUTLINE_COLOR, width: 3 },
         align: 'center',
       },
@@ -701,6 +951,29 @@ export class SpaceRenderer {
     checkBadge.visible = false;
     checkBadge.zIndex = 20;
     node.addChild(checkBadge);
+
+    const pressShadow = new Graphics();
+    pressShadow.eventMode = 'none';
+    pressShadow.visible = false;
+    // The shadow is genuinely behind the booth fill, so it cannot darken the
+    // booth's actual status color.
+    pressShadow.zIndex = -2;
+    node.addChild(pressShadow);
+
+    const searchHighlight = new Graphics();
+    searchHighlight.eventMode = 'none';
+    searchHighlight.visible = false;
+    // Persistent search/selection rope.
+    searchHighlight.zIndex = 4;
+    node.addChild(searchHighlight);
+
+    const focusHighlight = new Graphics();
+    focusHighlight.eventMode = 'none';
+    focusHighlight.visible = false;
+    // Temporary fly-to rope sits above the normal rope and disappears when
+    // the focus timer expires.
+    focusHighlight.zIndex = 5;
+    node.addChild(focusHighlight);
 
     const handle = new Graphics();
     handle.eventMode = 'none';
@@ -735,6 +1008,9 @@ export class SpaceRenderer {
       label,
       glass,
       checkBadge,
+      searchHighlight,
+      focusHighlight,
+      pressShadow,
     };
 
     const isEditorBackground = space.id === 'ground';
@@ -1097,6 +1373,44 @@ export class SpaceRenderer {
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
+    const isSearchHighlighted = this.searchHighlightedIds.has(space.id);
+    const isFocusHighlighted = this.focusHighlightedIds.has(space.id) &&
+      performance.now() < this.focusHighlightUntil;
+    const isSelected = this.selectedIds.has(space.id);
+    const initiallyVisible =
+      isSelected || isSearchHighlighted || isFocusHighlighted;
+    const initialPress = this.pressAnimations.get(space.id)?.progress ??
+      (initiallyVisible ? 1 : 0);
+
+    this.drawPressShadow(
+      entry.pressShadow,
+      geometry,
+      initialPress,
+      initiallyVisible,
+      1,
+    );
+    this.drawPerimeterRope(
+      entry.searchHighlight,
+      geometry,
+      !isFocusHighlighted && (isSelected || isSearchHighlighted),
+      1,
+      this.highlightRopePhase,
+      0x183a5a,
+      0xd5d9de,
+    );
+    this.drawPerimeterRope(
+      entry.focusHighlight,
+      geometry,
+      isFocusHighlighted,
+      1,
+      this.highlightRopePhase,
+      0x000000,
+      0x00b7ff,
+    );
+    entry.searchHighlight.visible = !isFocusHighlighted && (isSelected || isSearchHighlighted);
+    entry.focusHighlight.visible = isFocusHighlighted;
+    entry.pressShadow.visible = initiallyVisible;
+
     this.drawHandle(entry.handle, geometry);
     const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
     entry.handle.visible = showEditorHandles;
@@ -1169,6 +1483,17 @@ export class SpaceRenderer {
     shape.fill({ color, alpha: 1 });
   }
 
+  private getReadableTextColor(explicitColor: unknown, background: number): number {
+    if (typeof explicitColor === 'string' && /^[#0-9a-fA-F]/.test(explicitColor.trim())) {
+      return LABEL_COLOR;
+    }
+    const r = (background >> 16) & 0xff;
+    const g = (background >> 8) & 0xff;
+    const b = background & 0xff;
+    const luminance = (0.299 * r) + (0.587 * g) + (0.114 * b);
+    return luminance > 175 ? 0x111827 : 0xffffff;
+  }
+
   /** Shows important labels at a readable screen size with simple LOD. */
   private updateLabel(entry: SpaceNode, space: Space): void {
     const { width, height } = space.geometry;
@@ -1211,21 +1536,27 @@ export class SpaceRenderer {
     entry.label.text = displayText;
 
     const targetScreenFont = showTextboxText
-      ? (screenWidth < 130 ? 12 : 15)
-      : (screenWidth < 76 ? 10 : 11.5);
+      ? (screenWidth < 130 ? 13 : 16)
+      : (screenWidth < 76 ? 12 : 15);
 
     entry.label.style.fontSize = targetScreenFont / zoom;
+    const defaultTextColor = showTextboxText
+      ? 0x243039
+      : this.getReadableTextColor(
+          space.properties.displayTextColor,
+          this.statusStyles[space.properties.status ?? '']?.fill ?? LABEL_COLOR,
+        );
     const textColor = this.parsePropColor(
       space.properties.displayTextColor,
-      showTextboxText ? 0x243039 : LABEL_COLOR,
+      defaultTextColor,
     );
     const outlineColor = this.parsePropColor(
       space.properties.displayTextOutlineColor,
-      showTextboxText ? 0xffffff : LABEL_OUTLINE_COLOR,
+      showTextboxText ? 0xffffff : 0xffffff,
     );
     const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
       ? 0
-      : Math.min(4, showTextboxText ? 1.8 / zoom : 2.2 / zoom);
+      : Math.min(1.6, showTextboxText ? 1.0 / zoom : 0.7 / zoom);
 
     entry.label.style.fill = textColor;
     entry.label.style.stroke = { color: outlineColor, width: outlineWidth };
@@ -1255,7 +1586,278 @@ export class SpaceRenderer {
     }
   }
 
+  /** Draws only the small neutral cast shadow behind the pressed space. */
+  private drawPressShadow(
+    shadow: Graphics,
+    geometry: Space['geometry'],
+    press = 1,
+    active = true,
+    intensity = 1,
+  ): void {
+    shadow.clear();
+
+    if (!active || intensity <= 0) return;
+
+    const { width, height } = geometry;
+    const minSide = Math.min(width, height);
+    if (width <= 2 || height <= 2) return;
+
+    const strength = Math.max(0, Math.min(1, intensity));
+    const radius = Math.min(14, Math.max(5, minSide * 0.12));
+
+    // Very small, soft cast shadow. It lives behind the booth in z-order,
+    // so its pixels can never darken the booth itself.
+    const depth = 1.2 + press * 2.2;
+    const spread = 0.8 + press * 1.2;
+
+    shadow.roundRect(
+      depth * 0.45 - spread,
+      depth - spread,
+      width + spread * 2,
+      height + spread * 2,
+      radius + spread * 0.3,
+    );
+    shadow.fill({
+      color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
+      alpha: (0.14 + press * 0.12) * strength,
+    });
+
+    const soft = 2.2 + press * 1.2;
+    shadow.roundRect(
+      depth * 0.30 - soft,
+      depth * 0.65 - soft,
+      width + soft * 2,
+      height + soft * 2,
+      radius + soft * 0.25,
+    );
+    shadow.fill({
+      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
+      alpha: (0.035 + press * 0.045) * strength,
+    });
+  }
+
+  /**
+   * Draws only the animated perimeter rope.
+   * There is deliberately no fill, tint, highlight wash, or border.
+   */
+  private drawPerimeterRope(
+    rope: Graphics,
+    geometry: Space['geometry'],
+    active = true,
+    intensity = 1,
+    ropePhase = 0,
+    primaryColor = 0x183a5a,
+    secondaryColor = 0xd5d9de,
+  ): void {
+    rope.clear();
+
+    if (!active || intensity <= 0) return;
+
+    const { width, height } = geometry;
+    const minSide = Math.min(width, height);
+    if (width <= 2 || height <= 2) return;
+
+    const strength = Math.max(0, Math.min(1, intensity));
+    const radius = Math.min(14, Math.max(5, minSide * 0.12));
+
+    const inset = 0.25;
+    const points: Array<{ x: number; y: number }> = [];
+    const addLine = (
+      ax: number,
+      ay: number,
+      bx: number,
+      by: number,
+      steps: number,
+    ): void => {
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        points.push({
+          x: ax + (bx - ax) * t,
+          y: ay + (by - ay) * t,
+        });
+      }
+    };
+
+    if (geometry.type === 'circle' || geometry.type === 'ellipse') {
+      const cx = width / 2;
+      const cy = height / 2;
+      const rx = Math.max(1, width / 2 - inset);
+      const ry = Math.max(1, height / 2 - inset);
+      const steps = 72;
+      for (let i = 0; i <= steps; i += 1) {
+        const angle = (Math.PI * 2 * i) / steps;
+        points.push({
+          x: cx + Math.cos(angle) * rx,
+          y: cy + Math.sin(angle) * ry,
+        });
+      }
+    } else if (geometry.type === 'triangle') {
+      const a = { x: width / 2, y: inset };
+      const b = { x: width - inset, y: height - inset };
+      const d = { x: inset, y: height - inset };
+      addLine(a.x, a.y, b.x, b.y, 18);
+      addLine(b.x, b.y, d.x, d.y, 18);
+      addLine(d.x, d.y, a.x, a.y, 18);
+    } else if (geometry.type === 'diamond') {
+      const a = { x: width / 2, y: inset };
+      const b = { x: width - inset, y: height / 2 };
+      const d = { x: width / 2, y: height - inset };
+      const e = { x: inset, y: height / 2 };
+      addLine(a.x, a.y, b.x, b.y, 14);
+      addLine(b.x, b.y, d.x, d.y, 14);
+      addLine(d.x, d.y, e.x, e.y, 14);
+      addLine(e.x, e.y, a.x, a.y, 14);
+    } else {
+      const r = geometry.type === 'rounded-rectangle'
+        ? Math.min(12, Math.max(2, Math.min(width, height) * 0.14))
+        : Math.min(radius, Math.min(width, height) / 2);
+      const left = inset;
+      const top = inset;
+      const right = Math.max(left, width - inset);
+      const bottom = Math.max(top, height - inset);
+      const cornerSteps = 8;
+
+      addLine(left + r, top, right - r, top, Math.max(2, Math.round(width / 10)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = -Math.PI / 2 + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: right - r + Math.cos(a) * r,
+          y: top + r + Math.sin(a) * r,
+        });
+      }
+      addLine(right, top + r, right, bottom - r, Math.max(2, Math.round(height / 8)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: right - r + Math.cos(a) * r,
+          y: bottom - r + Math.sin(a) * r,
+        });
+      }
+      addLine(right - r, bottom, left + r, bottom, Math.max(2, Math.round(width / 10)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = Math.PI / 2 + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: left + r + Math.cos(a) * r,
+          y: bottom - r + Math.sin(a) * r,
+        });
+      }
+      addLine(left, bottom - r, left, top + r, Math.max(2, Math.round(height / 8)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = Math.PI + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: left + r + Math.cos(a) * r,
+          y: top + r + Math.sin(a) * r,
+        });
+      }
+    }
+
+    const loop: Array<{ x: number; y: number; distance: number }> = [];
+    let perimeter = 0;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length < 0.001) continue;
+      loop.push({ ...a, distance: perimeter });
+      perimeter += length;
+    }
+
+    if (loop.length < 2 || perimeter <= 0) return;
+
+    // Thick rope/tape construction: the perimeter is covered by a solid
+    // two-tone strand so the booth edge is visually consumed by the effect.
+    // Navy is the dominant body color; metal-grey sits inside it as the
+    // contrasting strand, with short diagonal wraps moving around the loop.
+    const ropeWidth = Math.max(3.8, Math.min(5.0, minSide * 0.040));
+    const innerWidth = ropeWidth * 0.64;
+
+    // Continuous metallic strand — this is the part that removes any visual gap.
+    for (let i = 0; i < loop.length; i += 1) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      rope.moveTo(a.x, a.y);
+      rope.lineTo(b.x, b.y);
+    }
+    rope.stroke({
+      color: primaryColor,
+      alpha: 1.0 * strength,
+      width: ropeWidth,
+      cap: 'round',
+      join: 'round',
+    });
+
+    // Continuous ink-blue inner strand, slightly narrower and visually seated
+    // inside the metal strand instead of floating beside it.
+    for (let i = 0; i < loop.length; i += 1) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      rope.moveTo(a.x, a.y);
+      rope.lineTo(b.x, b.y);
+    }
+    rope.stroke({
+      color: 0xc7ccd2,
+      alpha: 1.0 * strength,
+      width: innerWidth,
+      cap: 'round',
+      join: 'round',
+    });
+
+    // Wrapped bands: dense, overlapping italic bands visually fuse the two
+    // strands into one braided/tape-like loop. Each band overlaps its
+    // neighbors, so there is no exposed gap between units.
+    const wrapPitch = Math.max(4.5, Math.min(6.2, minSide * 0.060));
+    const wrapLength = wrapPitch * 1.24;
+    const wrapCount = Math.max(12, Math.ceil(perimeter / wrapPitch));
+
+    for (let index = 0; index < wrapCount; index += 1) {
+      const distance = (index * perimeter / wrapCount + ropePhase * perimeter) % perimeter;
+
+      let segmentIndex = 0;
+      while (
+        segmentIndex < loop.length - 1 &&
+        loop[segmentIndex + 1].distance <= distance
+      ) {
+        segmentIndex += 1;
+      }
+
+      const current = loop[segmentIndex];
+      const next = segmentIndex === loop.length - 1
+        ? { ...loop[0], distance: perimeter }
+        : loop[segmentIndex + 1];
+
+      const span = Math.max(0.001, next.distance - current.distance);
+      const t = Math.max(0, Math.min(1, (distance - current.distance) / span));
+      const cx = current.x + (next.x - current.x) * t;
+      const cy = current.y + (next.y - current.y) * t;
+      const tangent = Math.atan2(next.y - current.y, next.x - current.x);
+
+      // Perpendicular to the perimeter tangent, then slightly slanted so the
+      // wraps read like hand-wrapped tape rather than fence posts.
+      const normalX = -Math.sin(tangent);
+      const normalY = Math.cos(tangent);
+      const tangentX = Math.cos(tangent);
+      const tangentY = Math.sin(tangent);
+      const slash = Math.PI * 0.18;
+      const along = Math.cos(slash) * (wrapLength * 0.5);
+      const across = Math.sin(slash) * (ropeWidth * 0.8);
+
+      const x1 = cx - tangentX * along - normalX * across;
+      const y1 = cy - tangentY * along - normalY * across;
+      const x2 = cx + tangentX * along + normalX * across;
+      const y2 = cy + tangentY * along + normalY * across;
+
+      rope.moveTo(x1, y1);
+      rope.lineTo(x2, y2);
+      rope.stroke({
+        color: index % 2 === 0 ? primaryColor : secondaryColor,
+        alpha: 1.0 * strength,
+        width: Math.max(2.1, ropeWidth * 0.70),
+        cap: 'round',
+      });
+    }
+  }
   /** Draws a liquid-glass surface matching the receded vector geometry. */
+
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
 
@@ -1458,13 +2060,9 @@ export class SpaceRenderer {
     const id = space.id;
     const isSelected = this.selectedIds.has(id);
 
-    if (isSelected) {
-      return {
-        ...base,
-        stroke: SELECTED_COLOR,
-        strokeWidth: SELECTED_STROKE_WIDTH,
-      };
-    }
+    // Selection is represented by the animated perimeter rope/check badge.
+    // Do not alter the booth's own status stroke or fill color.
+    if (isSelected) return base;
 
     // In edit mode every space is a legitimate drag/select target, so hover
     // always shows feedback there. In view mode, a space the SelectionRule

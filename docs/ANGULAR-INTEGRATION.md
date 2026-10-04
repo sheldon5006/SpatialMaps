@@ -65,6 +65,9 @@ readonly settings: SpatialMapSettingsPatch = {
     enabled: true,
     size: 50,
   },
+  search: {
+    enabled: true,
+  },
 };
 ~~~~
 
@@ -262,7 +265,65 @@ this.map.setSelectionRule((space) => {
 });
 ~~~~
 
-## 8. Selection, filtering and mode
+## 8. Integrated booth search
+
+In View mode the component provides a built-in booth search panel. It searches booth ID, booth name and status, and the result list uses the same live `Space[]` data as the renderer.
+
+Clicking a result navigates the map to the booth while reserving the left panel area so the booth remains visible.
+
+Programmatic search is available through:
+
+~~~~ts
+const matches = this.map.searchSpaces('A101');
+const booked = this.map.searchSpaces('booked');
+~~~~
+
+Search supports multiple words. All search terms must match the booth's searchable text.
+
+The Angular output:
+
+~~~~html
+<app-spatial-map
+  (searchResultClick)="onSearchResultClick($event)">
+</app-spatial-map>
+~~~~
+
+receives the selected space ID.
+
+~~~~ts
+onSearchResultClick(id: string): void {
+  this.analytics.track('map_search_result_opened', { id });
+}
+~~~~
+
+The search panel is a navigation aid; it does not replace the normal map selection/filter workflow.
+
+A search result can also be highlighted directly from application code:
+
+~~~~ts
+this.map.setSearchHighlight('A101');
+~~~~
+
+Pass `null` to clear it.
+
+
+## Search panel setting
+
+Search is an extension of the SpatialMap component rather than a separate widget. It can be enabled or disabled through the same settings object used by the map:
+
+~~~~ts
+this.map.setMapSettings({
+  search: {
+    enabled: true,
+  },
+});
+~~~~
+
+When enabled in View mode, the component reserves a dedicated left pane for search and automatically resizes the map viewport beside it. When disabled, the map uses the full available viewport.
+
+The search panel does not replace map browsing, filtering or selection. A result click navigates the existing camera to the matching booth, using the same map engine.
+
+## 10. Selection, filtering and mode
 
 ~~~~ts
 this.map.selectSpaces(['A101', 'A103']);
@@ -278,7 +339,7 @@ this.map.setVisualFilter({ type: 'selected' });
 
 These calls use the same engine as the toolbar.
 
-## 9. Camera control
+## 11. Camera control
 
 ~~~~ts
 this.map.setZoom(1.25);
@@ -303,7 +364,7 @@ this.map.setMapSettings({
 
 The current architecture distinguishes base browsing zoom, minimum readable manual zoom, maximum zoom and fit-to-map navigation.
 
-## 10. Theme and editor grid
+## 12. Theme and editor grid
 
 ~~~~ts
 this.map.setMapSettings({
@@ -317,7 +378,7 @@ this.map.setMapSettings({
 
 The same settings can be changed from the existing Map Settings UI.
 
-## 11. Editing and layering
+## 13. Editing and layering
 
 ~~~~ts
 this.map.bringToFront('A101');
@@ -326,7 +387,7 @@ this.map.sendToBack('A101');
 
 Edit mode still provides the existing drag, resize, rotation and inspector workflow.
 
-## 12. Import and export
+## 14. Import and export
 
 ~~~~ts
 const revision = this.map.exportMap();
@@ -342,7 +403,7 @@ this.map.importMap(savedRevision);
 
 The exported payload is versioned and contains serializable Space data.
 
-## 13. Angular outputs
+## 15. Angular outputs
 
 Available outputs:
 
@@ -377,7 +438,7 @@ onSelectionChange(ids: string[]): void {
 }
 ~~~~
 
-## 14. Recommended booking architecture
+## 16. Recommended booking architecture
 
 ~~~~text
 Angular application
@@ -413,7 +474,7 @@ this.map.updateSpace('A101', {
 });
 ~~~~
 
-## 15. Backward-compatible workflow
+## 17. Backward-compatible workflow
 
 The intended migration path is:
 
@@ -438,7 +499,7 @@ There is one rendering pipeline. Angular UI actions and application code both op
 
 A developer can start with the current demo and later move to real API data without replacing the component.
 
-## 16. Public integration surface
+## 18. Public integration surface
 
 The repository now provides src/public-api.ts as the single integration entry point.
 
@@ -452,7 +513,7 @@ It exports:
 - default settings and default status definitions
 - MapMode, SelectionRule and VisualFilter
 
-## 17. Current packaging note
+## 19. Current packaging note
 
 The repository is currently an application/prototype rather than a published Angular package. The integration API is intentionally structured so it can become a packaged Angular library later.
 

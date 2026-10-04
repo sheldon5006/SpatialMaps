@@ -55,6 +55,7 @@ export class SpatialMapEngine {
   private pointerInteraction: PointerInteraction | null = null;
   private transitions: CameraTransitions | null = null;
   private renderer: SpaceRenderer | null = null;
+  private cameraEngine: Camera | null = null;
   private theme: MapTheme = DEFAULT_SPATIAL_MAP_SETTINGS.theme;
   private cameraLimits = {
     minZoom: DEFAULT_SPATIAL_MAP_SETTINGS.zoom.minZoom,
@@ -63,9 +64,14 @@ export class SpatialMapEngine {
   private baseZoom = DEFAULT_SPATIAL_MAP_SETTINGS.zoom.baseZoom;
   private gridEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled;
   private gridSize = DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
+  private searchEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled;
+  private focusEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+  private focusDurationMs = DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+  private focusColor = DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
 
   private readonly onTick = (): void => {
     this.transitions?.tick();
+    this.renderer?.tick(16.667);
     this.renderer?.setCameraZoom(this.transitions?.getZoom() ?? 1);
   };
 
@@ -109,6 +115,7 @@ export class SpatialMapEngine {
     app.stage.addChild(this.world);
 
     const cameraEngine = new Camera(this.world, this.cameraLimits);
+    this.cameraEngine = cameraEngine;
     this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.getState());
     this.renderer.setTheme(this.theme);
     this.transitions = new CameraTransitions(app, cameraEngine, (ids) =>
@@ -194,6 +201,28 @@ export class SpatialMapEngine {
     this.renderer?.setSelectionRule(rule);
   }
 
+  setSearchHighlights(ids: string[]): void {
+    this.renderer?.setSearchHighlights(ids);
+  }
+
+  setSearchHighlight(id: string | null): void {
+    this.setSearchHighlights(id ? [id] : []);
+  }
+
+  focusSpaces(
+    ids: string[],
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.renderer?.focusSpaces(ids, options);
+  }
+
+  focusSpace(
+    id: string,
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.focusSpaces([id], options);
+  }
+
   isSelectable(id: string): boolean {
     const space = this.renderer?.getSpace(id);
     return !!space && (this.renderer?.isSelectable(space) ?? false);
@@ -211,6 +240,11 @@ export class SpatialMapEngine {
 
   getMode(): MapMode {
     return this.renderer?.getMode() ?? 'view';
+  }
+
+  /** Returns the current camera transform for nearest-match search logic. */
+  getCameraState(): { x: number; y: number; zoom: number } {
+    return this.cameraEngine?.getState() ?? { x: 0, y: 0, zoom: 1 };
   }
 
   setVisualFilter(filter: VisualFilter): void {
@@ -270,6 +304,10 @@ export class SpatialMapEngine {
         this.renderer?.setGridSize(this.gridSize);
       }
     }
+
+    if (settings.search?.enabled !== undefined) {
+      this.searchEnabled = settings.search.enabled;
+    }
   }
 
   getSettings(): SpatialMapSettings {
@@ -283,6 +321,14 @@ export class SpatialMapEngine {
       grid: {
         enabled: this.gridEnabled,
         size: this.gridSize,
+      },
+      search: {
+        enabled: this.searchEnabled,
+      },
+      focus: {
+        enabled: this.focusEnabled,
+        durationMs: this.focusDurationMs,
+        color: this.focusColor,
       },
     };
   }
@@ -344,6 +390,7 @@ export class SpatialMapEngine {
     this.pointerInteraction = null;
     this.transitions = null;
     this.renderer = null;
+    this.cameraEngine = null;
     this.world = null;
 
     this.app?.destroy(true, { children: true, texture: true });

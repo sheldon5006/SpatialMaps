@@ -122,6 +122,8 @@ function defaultFormState(): SpaceFormState {
  *  the toolbar no longer overlaps the canvas at all (it's a real header
  *  now) — so only the drawer needs accounting for here. */
 const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
+const MAP_VIEW_PADDING = { top: 24, right: 24, bottom: 24, left: 24 };
+const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
@@ -140,7 +142,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
   exportAs: 'spatialMap',
   imports: [DecimalPipe, FormsModule],
   template: `
-    <div class="spatial-map-root">
+    <div class="spatial-map-root" [class.search-open]="mode() === 'view' && searchEnabled()">
       <!-- Top toolbar: a real in-flow header, not an overlay — the canvas
            area below it is the only thing the camera/handles ever need to
            reason about, so nothing rendered near world-space (0,0) can
@@ -211,13 +213,122 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
       </div>
 
       <div class="canvas-area">
-        <div #host class="spatial-map-host"></div>
+        @if (mode() === 'view' && searchEnabled()) {
+          <aside
+            class="search-panel"
+            [class.collapsed]="!searchListOpen()"
+            aria-label="Search spaces"
+          >
+            <div class="search-panel-header">
+              <div>
+                <strong>Find a booth</strong>
+                @if (searchListOpen()) {
+                  <span>{{ searchableBooths().length }} booths</span>
+                }
+              </div>
+
+              <div class="search-panel-actions">
+                @if (searchQuery()) {
+                  <button
+                    type="button"
+                    class="search-clear-btn"
+                    (click)="clearSearch()"
+                    aria-label="Clear search"
+                  >×</button>
+                }
+                <button
+                  type="button"
+                  class="search-collapse-btn"
+                  (click)="toggleSearchList()"
+                  [attr.aria-expanded]="searchListOpen()"
+                  [attr.aria-label]="searchListOpen() ? 'Collapse booth list' : 'Expand booth list'"
+                  [title]="searchListOpen() ? 'Collapse booth list' : 'Show booth list'"
+                >
+                  <span [class.collapsed]="!searchListOpen()">⌄</span>
+                </button>
+              </div>
+            </div>
+
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                [ngModel]="searchQuery()"
+                (ngModelChange)="onSearchQueryChange($event)"
+                placeholder="Search booth name or ID..."
+                autocomplete="off"
+              />
+            </label>
+
+            @if (!searchListOpen() && hoverPreview(); as preview) {
+              <div class="hover-chip search-panel-hover">
+                <span class="hover-chip-name">{{ preview.name }}</span>
+                <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+              </div>
+            }
+
+            @if (searchListOpen() && searchQuery() && searchResults().length > 0) {
+              <div class="search-summary">
+                {{ searchMatches().length }} matching {{ searchMatches().length === 1 ? 'booth' : 'booths' }}
+              </div>
+
+              <div class="search-table-head" aria-hidden="true">
+                <span>BOOTH</span>
+                <span>NAME</span>
+                <span>STATUS</span>
+              </div>
+              <div class="search-results" role="list">
+                @for (space of searchResults(); track space.id) {
+                  <button
+                    type="button"
+                    class="search-result"
+                    [class.selected]="searchHighlightedId() === space.id || selectedIds().includes(space.id)"
+                    (click)="openSearchResult(space.id)"
+                    role="listitem"
+                  >
+                    <span class="search-result-id">{{ searchDisplayName(space) }}</span>
+                    <span class="search-result-name">{{ searchLongName(space) }}</span>
+                    <span
+                      class="search-result-status"
+                      [style.background]="statusColor(space.properties.status)"
+                    >
+                      {{ statusLabel(space.properties.status) }}
+                    </span>
+                  </button>
+                }
+              </div>
+            }
+
+            @if (searchQuery() && searchResults().length === 0) {
+              <div class="search-empty">
+                <strong>No booths found</strong>
+                <span>Try a booth ID, name or status.</span>
+              </div>
+            }
+          </aside>
+        }
+
+        <div class="map-pane">
+          <div #host class="spatial-map-host"></div>
+        </div>
 
         @if (settingsOpen()) {
           <div class="settings-panel">
             <div class="settings-header">
               <strong>Map settings</strong>
               <button class="icon-btn" (click)="settingsOpen.set(false)">Close</button>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">Search</span>
+              <label class="toggle-option">
+                <input
+                  type="checkbox"
+                  [ngModel]="searchEnabled()"
+                  (ngModelChange)="setSearchEnabled($event)"
+                />
+                <span>Show booth search</span>
+              </label>
             </div>
 
             <div class="settings-section">
@@ -326,12 +437,22 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           </div>
         }
 
-        <!-- Hover preview chip -->
+        <!-- Hover preview chip:
+             collapsed search -> inside search panel below the search box;
+             expanded search -> immediately beside the search panel;
+             search disabled/edit mode -> original canvas position. -->
         @if (hoverPreview(); as preview) {
-          <div class="hover-chip">
-            <span class="hover-chip-name">{{ preview.name }}</span>
-            <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
-          </div>
+          @if (mode() === 'view' && searchEnabled() && searchListOpen()) {
+            <div class="hover-chip search-adjacent-hover">
+              <span class="hover-chip-name">{{ preview.name }}</span>
+              <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+            </div>
+          } @else if (!(mode() === 'view' && searchEnabled())) {
+            <div class="hover-chip">
+              <span class="hover-chip-name">{{ preview.name }}</span>
+              <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+            </div>
+          }
         }
 
         <!-- Contextual inspector drawer -->
@@ -714,6 +835,264 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         background: rgba(255, 255, 255, 0.1);
         color: #c3c7d1;
         text-transform: capitalize;
+      }
+
+      /* ---- Search panel ------------------------------------------------ */
+
+      .map-pane {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+      }
+
+      .search-panel {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        z-index: 16;
+        width: 360px;
+        height: auto;
+        max-height: calc(100% - 32px);
+        display: flex;
+        flex-direction: column;
+        background: rgba(18, 20, 26, 0.94);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 14px;
+        box-shadow:
+          0 18px 45px rgba(0, 0, 0, 0.24),
+          0 2px 8px rgba(0, 0, 0, 0.14);
+        overflow: hidden;
+      }
+
+      .search-panel.collapsed {
+        height: auto;
+        max-height: none;
+      }
+
+      .search-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 16px 12px;
+        color: #e8eaf0;
+      }
+
+      .search-panel-header > div {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .search-panel-header strong {
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+
+      .search-panel-header span {
+        color: #7f8794;
+        font-size: 11px;
+      }
+
+      .search-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .search-collapse-btn {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #aab1bd;
+      }
+
+      .search-collapse-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .search-collapse-btn span {
+        font-size: 14px;
+        line-height: 1;
+        transform: translateY(-1px);
+        transition: transform 0.16s ease;
+      }
+
+      .search-collapse-btn span.collapsed {
+        transform: rotate(-90deg) translateX(1px);
+      }
+
+      .search-clear-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #aab1bd;
+        font-size: 18px;
+      }
+
+      .search-box {
+        margin: 0 14px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.055);
+        color: #8f97a3;
+      }
+
+      .search-box:focus-within {
+        border-color: #3a7afe;
+        box-shadow: 0 0 0 2px rgba(58, 122, 254, 0.14);
+      }
+
+      .search-box span {
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .search-box input {
+        min-width: 0;
+        width: 100%;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: #edf0f4;
+        font: inherit;
+      }
+
+      .search-box input::placeholder {
+        color: #6f7783;
+      }
+
+      .search-summary {
+        padding: 0 16px 10px;
+        color: #707987;
+        font-size: 11px;
+      }
+
+      /* Hover information lives with the search UI instead of being hidden
+         underneath the left panel. */
+      .search-panel-hover {
+        position: static;
+        margin: 0 14px 10px;
+        width: auto;
+        align-self: stretch;
+        box-sizing: border-box;
+      }
+
+      .search-adjacent-hover {
+        top: 16px;
+        left: 392px;
+        z-index: 17;
+      }
+
+      .search-table-head {
+        display: grid;
+        grid-template-columns: 58px 1fr auto;
+        gap: 10px;
+        padding: 0 17px 7px;
+        color: #606876;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      .search-results {
+        flex: 0 0 auto;
+        min-height: 0;
+        max-height: min(42vh, 420px);
+        overflow-y: auto;
+        padding: 0 8px 12px;
+      }
+
+      .search-results::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .search-results::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
+      }
+
+      .search-result {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 58px 1fr auto;
+        gap: 7px 10px;
+        align-items: center;
+        padding: 10px 9px;
+        margin-bottom: 4px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #dfe3ea;
+        text-align: left;
+      }
+
+      .search-result:hover {
+        background: rgba(255, 255, 255, 0.055);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .search-result.selected {
+        background: rgba(58, 122, 254, 0.10);
+        border-color: rgba(58, 122, 254, 0.28);
+      }
+
+      .search-result-id {
+        font-weight: 700;
+        font-size: 12px;
+        color: #f0f3f7;
+      }
+
+      .search-result-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #aeb4be;
+        font-size: 11px;
+      }
+
+      .search-result-status {
+        justify-self: end;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 3px 6px;
+        border-radius: 999px;
+        color: #15191d;
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .search-empty {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: center;
+        padding: 36px 20px;
+        text-align: center;
+        color: #7e8692;
+        font-size: 11px;
+      }
+
+      .search-empty strong {
+        color: #dfe3ea;
+        font-size: 13px;
       }
 
       /* ---- Map settings ---------------------------------------------- */
@@ -1348,6 +1727,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   @Output() readonly filterChange = new EventEmitter<'all' | SpaceStatus | 'selected'>();
   @Output() readonly spaceTransform = new EventEmitter<{ id: string; geometry: Space['geometry'] }>();
   @Output() readonly spacesChange = new EventEmitter<Space[]>();
+  @Output() readonly searchResultClick = new EventEmitter<string>();
   @Output() readonly ready = new EventEmitter<void>();
 
   @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
@@ -1367,9 +1747,45 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly mapTheme = signal<MapTheme>('light');
   protected readonly settingsOpen = signal(false);
   protected readonly gridEnabled = signal(true);
+  protected readonly searchEnabled = signal(DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
+  protected focusEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+  protected focusDurationMs = DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+  protected focusColor = DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
+  protected readonly searchQuery = signal('');
+  protected readonly searchHighlightedId = signal<string | null>(null);
+  protected readonly searchListOpen = signal(true);
+
+  protected readonly searchableBooths = computed(() =>
+    this.searchableSpaces().filter((space) => space.type === 'booth'),
+  );
+
+  /** All matches are kept for map highlighting; the list is capped only for UI density. */
+  protected readonly searchMatches = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    if (!query) return [];
+
+    const terms = query.split(/\s+/).filter(Boolean);
+    return this.searchableBooths().filter((space) => {
+      const haystack = [
+        space.id,
+        space.properties.name ?? '',
+        space.properties.status ?? '',
+        this.statusLabel(space.properties.status),
+      ].join(' ').toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
+  });
+
+  protected readonly searchResults = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    if (!query) return this.searchableBooths().slice(0, 12);
+    return this.searchMatches().slice(0, 20);
+  });
+
+  protected readonly searchableSpaces = signal<Space[]>([]);
 
   protected readonly benchSizes = BENCH_SIZES;
   protected get statusOptions(): string[] {
@@ -1410,12 +1826,16 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setSettings(this.buildSettings());
       this.applyStatusStyles();
       this.engine.loadSpaces(this.spaces ?? TEST_SPACES);
+      this.searchableSpaces.set(this.engine.exportData().spaces);
       this.engineReady = true;
       this.ready.emit();
       // Start from a complete map view instead of the engine's 60px/60px
       // world offset. Fit is allowed to go below the interactive readable
       // minimum so the whole venue remains visible.
-      this.engine.camera.fitBounds(undefined, { duration: 0 });
+      this.engine.camera.fitBounds(undefined, {
+        duration: 0,
+        padding: MAP_VIEW_PADDING,
+      });
       // The overview is a browsing start point, not a tiny architectural
       // thumbnail. Center first, then move to the configured readable base.
       this.engine.camera.setZoom(this.viewBaseZoom, { duration: 0 });
@@ -1465,7 +1885,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       );
 
       this.engine.on('spaceschange', (spaces) =>
-        this.zone.run(() => this.spacesChange.emit(spaces)),
+        this.zone.run(() => {
+          this.searchableSpaces.set(spaces);
+          this.spacesChange.emit(spaces);
+        }),
       );
 
       // FPS updates several times a second — too frequent to route through
@@ -1506,6 +1929,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.viewMaxZoom = zoom.maxZoom ?? DEFAULT_SPATIAL_MAP_SETTINGS.zoom.maxZoom;
     this.gridEnabled.set(grid.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled);
     this.gridSize = grid.size ?? DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
+    this.searchEnabled.set(settings.search?.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled);
+    this.focusEnabled = settings.focus?.enabled ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+    this.focusDurationMs = settings.focus?.durationMs ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+    this.focusColor = settings.focus?.color ?? DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
     this.statusDefinitions = (this.statuses ?? DEFAULT_STATUS_DEFINITIONS).map((status) => ({ ...status }));
   }
 
@@ -1520,6 +1947,14 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       grid: {
         enabled: this.gridEnabled(),
         size: this.gridSize,
+      },
+      search: {
+        enabled: this.searchEnabled(),
+      },
+      focus: {
+        enabled: this.focusEnabled,
+        durationMs: this.focusDurationMs,
+        color: this.focusColor,
       },
     };
   }
@@ -1538,8 +1973,19 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     if (settings.zoom?.maxZoom !== undefined) this.viewMaxZoom = settings.zoom.maxZoom;
     if (settings.grid?.enabled !== undefined) this.gridEnabled.set(settings.grid.enabled);
     if (settings.grid?.size !== undefined) this.gridSize = settings.grid.size;
+    if (settings.search?.enabled !== undefined) this.searchEnabled.set(settings.search.enabled);
+    if (settings.focus?.enabled !== undefined) this.focusEnabled = settings.focus.enabled;
+    if (settings.focus?.durationMs !== undefined) this.focusDurationMs = Math.max(0, Math.round(settings.focus.durationMs));
+    if (settings.focus?.color !== undefined) this.focusColor = settings.focus.color;
 
     this.engine.setSettings(settings);
+
+    if (settings.search?.enabled !== undefined) {
+      this.engine.camera.fitBounds(undefined, {
+        padding: this.searchEnabled() ? SEARCH_PANEL_PADDING : { top: 24, right: 24, bottom: 24, left: 24 },
+        duration: 250,
+      });
+    }
   }
 
   getMapSettings(): SpatialMapSettings {
@@ -1618,12 +2064,36 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.engine.camera.fitBounds(undefined, options);
   }
 
-  flyTo(id: string, options?: Parameters<SpatialMapEngine['camera']['flyTo']>[1]): void {
+  flyTo(
+    id: string,
+    options?: Parameters<SpatialMapEngine['camera']['flyTo']>[1],
+  ): void {
     this.engine.camera.flyTo(id, options);
+
+    const durationMs = this.focusEnabled ? this.focusDurationMs : 0;
+    if (durationMs > 0) {
+      this.engine.focusSpace(id, {
+        durationMs,
+        color: this.focusColor,
+      });
+    }
+  }
+
+  setFocusSettings(focus: Partial<SpatialMapSettings['focus']>): void {
+    this.setMapSettings({ focus });
+  }
+
+  getFocusSettings(): SpatialMapSettings['focus'] {
+    return this.getMapSettings().focus;
   }
 
   setZoom(zoom: number): void {
     this.engine.camera.setZoom(zoom);
+  }
+
+  setSearchHighlight(id: string | null): void {
+    this.searchHighlightedId.set(id);
+    this.engine.setSearchHighlight(id);
   }
 
   getZoom(): number {
@@ -1721,6 +2191,167 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setVisualFilter({ type: 'status', status: kind });
     }
     this.filterChange.emit(kind);
+  }
+
+  protected toggleSearchList(): void {
+    this.searchListOpen.update((open) => !open);
+  }
+
+  protected onSearchQueryChange(query: string): void {
+    this.searchQuery.set(query);
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      this.searchHighlightedId.set(null);
+      this.engine.setSearchHighlights([]);
+      this.engine.focusSpaces([]);
+      return;
+    }
+
+    const matches = this.searchMatches();
+    const ids = matches.map((space) => space.id);
+
+    // Only reveal the result list when there are actual matches. The panel
+    // naturally grows to the height of the visible result rows.
+    this.searchListOpen.set(matches.length > 0);
+
+    // Every matching booth is highlighted on every keystroke.
+    this.searchHighlightedId.set(matches.length === 1 ? matches[0].id : null);
+    this.engine.setSearchHighlights(ids);
+
+    // A single result or a tight cluster flies to the nearest matching booth.
+    // A scattered multi-result search zooms out to show all matching booths.
+    if (matches.length === 1 || this.isSearchCluster(matches)) {
+      const nearest = this.nearestSearchMatch(matches);
+      this.engine.camera.flyTo(nearest.id, {
+        padding: MAP_VIEW_PADDING,
+        maxZoom: 1.8,
+        duration: 450,
+      });
+    } else {
+      this.engine.camera.fitBounds(ids, {
+        padding: MAP_VIEW_PADDING,
+        maxZoom: 1.15,
+        duration: 450,
+      });
+    }
+
+    // The temporary focus rope is applied to every current match, regardless
+    // of whether the camera flies to one result or fits the multi-result set.
+    if (this.focusEnabled && this.focusDurationMs > 0) {
+      this.engine.focusSpaces(ids, {
+        durationMs: this.focusDurationMs,
+        color: '#111827',
+      });
+    } else {
+      this.engine.focusSpaces([]);
+    }
+  }
+
+  private isSearchCluster(matches: Space[]): boolean {
+    if (matches.length <= 1) return true;
+
+    const centers = matches.map((space) => ({
+      x: space.geometry.x + space.geometry.width / 2,
+      y: space.geometry.y + space.geometry.height / 2,
+    }));
+    const centerX = centers.reduce((sum, point) => sum + point.x, 0) / centers.length;
+    const centerY = centers.reduce((sum, point) => sum + point.y, 0) / centers.length;
+
+    return centers.every((point) =>
+      Math.hypot(point.x - centerX, point.y - centerY) <= 320,
+    );
+  }
+
+  private nearestSearchMatch(matches: Space[]): Space {
+    const camera = this.engine.getCameraState();
+    const viewportWidth = Math.max(1, this.hostRef.nativeElement.clientWidth);
+    const viewportHeight = Math.max(1, this.hostRef.nativeElement.clientHeight);
+    const viewportCenterX = (viewportWidth / 2 - camera.x) / camera.zoom;
+    const viewportCenterY = (viewportHeight / 2 - camera.y) / camera.zoom;
+
+    return matches.reduce((nearest, space) => {
+      const currentX = space.geometry.x + space.geometry.width / 2;
+      const currentY = space.geometry.y + space.geometry.height / 2;
+      const nearestX = nearest.geometry.x + nearest.geometry.width / 2;
+      const nearestY = nearest.geometry.y + nearest.geometry.height / 2;
+
+      return Math.hypot(currentX - viewportCenterX, currentY - viewportCenterY) <
+        Math.hypot(nearestX - viewportCenterX, nearestY - viewportCenterY)
+        ? space
+        : nearest;
+    });
+  }
+
+  protected clearSearch(): void {
+    this.searchQuery.set('');
+    this.searchHighlightedId.set(null);
+    this.engine.setSearchHighlights([]);
+    this.engine.focusSpaces([]);
+  }
+
+  protected setSearchEnabled(enabled: boolean): void {
+    this.searchEnabled.set(enabled);
+    if (!enabled) this.setSearchHighlight(null);
+    this.setMapSettings({
+      search: { enabled },
+    });
+  }
+
+  protected searchDisplayName(space: Space): string {
+    return space.id;
+  }
+
+  protected searchLongName(space: Space): string {
+    const raw = (space.properties.name ?? '').replace(/\\n/g, ' ').trim();
+    const prefixed = raw.toLowerCase().startsWith(space.id.toLowerCase())
+      ? raw.slice(space.id.length).replace(/^[-:\s]+/, '').trim()
+      : raw;
+    return prefixed || 'Untitled booth';
+  }
+
+  protected statusColor(status: string | undefined): string {
+    return this.statusDefinitions.find((item) => item.key === status)?.color ?? '#64748b';
+  }
+
+  protected openSearchResult(id: string): void {
+    const target = this.engine.getSpace(id);
+    if (!target) return;
+
+    // Clicking a result means "take me to this booth" and "select this booth".
+    // Search matches remain visible, but the clicked row becomes the actual
+    // business selection when the selection rule permits it.
+    this.engine.selectSpace(id, true);
+
+    this.engine.camera.flyTo(id, {
+      padding: MAP_VIEW_PADDING,
+      maxZoom: 1.8,
+      duration: 450,
+    });
+
+    if (this.focusEnabled && this.focusDurationMs > 0) {
+      this.engine.focusSpaces([id], {
+        durationMs: this.focusDurationMs,
+        color: '#111827',
+      });
+    }
+
+    this.searchHighlightedId.set(id);
+    this.searchResultClick.emit(id);
+  }
+  /** Programmatic search helper for surrounding Angular code. */
+  searchSpaces(query: string): Space[] {
+    const terms = query.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    return this.searchableBooths().filter((space) => {
+      if (terms.length === 0) return true;
+      const haystack = [
+        space.id,
+        space.properties.name ?? '',
+        space.properties.status ?? '',
+        this.statusLabel(space.properties.status),
+      ].join(' ').toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
   }
 
   protected statusLabel(status: string | undefined): string {

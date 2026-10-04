@@ -12,6 +12,8 @@ export {
 } from './lib/core/spatial-map-settings';
 export type {
   SpatialMapGridSettings,
+  SpatialMapSearchSettings,
+  SpatialMapFocusSettings,
   SpatialMapSettings,
   SpatialMapSettingsPatch,
   SpatialMapZoomSettings,
