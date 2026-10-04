@@ -79,7 +79,8 @@ const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x38bdf8;
 const SEARCH_HIGHLIGHT_CORE_COLOR = 0xffffff;
 const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.32;
 const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.98;
-const SEARCH_HIGHLIGHT_BLUR = 8;
+const SEARCH_HIGHLIGHT_BLUR = 7;
+
 const HIGHLIGHT_PULSE_SPEED = 0.0038;
 const HIGHLIGHT_OUTER_MIN_ALPHA = 0.16;
 const HIGHLIGHT_OUTER_MAX_ALPHA = 0.42;
@@ -1382,7 +1383,6 @@ export class SpaceRenderer {
     entry.label.filters = filters;
     entry.checkBadge.filters = filters;
     entry.handle.filters = filters;
-    entry.searchHighlight.filters = [];
 
     if (entry.image) {
       entry.image.sprite.filters = filters;
