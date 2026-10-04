@@ -15,6 +15,8 @@ export type SpaceStatus =
 /** High-level role of a map element. */
 export type SpaceElementType = 'booth' | 'prop' | 'textbox';
 
+export type MapTheme = 'dark' | 'light';
+
 /** Basic infrastructure/prop vocabulary for venue and market maps. */
 interface BaseGeometry {
   x: number;
