@@ -1105,8 +1105,8 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
   protected readonly propColorPalette = PROP_COLOR_PALETTE;
   protected readonly gridSizes = [25, 50, 100] as const;
-  protected viewMinZoom = 0.45;
-  protected viewBaseZoom = 0.75;
+  protected viewMinZoom = 0.65;
+  protected viewBaseZoom = 0.88;
   protected viewMaxZoom = 2.8;
   protected gridSize = 50;
   protected form: SpaceFormState = defaultFormState();
