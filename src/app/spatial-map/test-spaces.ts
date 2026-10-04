@@ -276,8 +276,8 @@ export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
   // 5. Booths 1–16: primary straight row(s) around Jersey Street.
   // ------------------------------------------------------------------------
-  ...boothRow('top-a', ['01','02','03','04','05','06','07','08'], 260, 258, 62, 38, 6, 0),
-  ...boothRow('top-b', ['09','10','11','12','13','14','15','16'], 690, 258, 62, 38, 6, 2),
+  ...boothRow('top-a', ['01','02','03','04','05','06','07','08'], 258, 258, 50, 38, 6, 0),
+  ...boothRow('top-b', ['09','10','11','12','13','14','15','16'], 690, 258, 50, 38, 6, 2),
 
   // Booth 17–24: curved/angled perimeter around the Farmers Market.
   booth('17', '17', 594, 346, 58, 38, 'available', 55),
@@ -380,7 +380,7 @@ export const TEST_SPACES: Space[] = [
 
   // Four entrance / exit markers around the circulation edge.
   imageProp('west-entry', 'West Entry', 24, 276, 56, 56, poiIcon('exit')),
-  imageProp('north-entry', 'North Entry', 594, 0, 56, 56, poiIcon('exit')),
+  imageProp('north-entry', 'North Entry', 594, 28, 56, 56, poiIcon('exit')),
   imageProp('east-entry', 'East Entry', 1318, 300, 56, 56, poiIcon('exit')),
   imageProp('south-entry', 'South Entry', 944, 810, 56, 56, poiIcon('exit')),
   imageProp('north-arrow', 'North', 1244, 34, 64, 64, poiIcon('north')),
