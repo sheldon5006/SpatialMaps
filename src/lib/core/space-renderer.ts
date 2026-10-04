@@ -482,7 +482,7 @@ export class SpaceRenderer {
         visible,
         focusIntensity,
         this.highlightRopePhase,
-        isFocus ? 0xff8a00 : 0x183a5a,
+        isFocus ? 0x000000 : 0x183a5a,
         isFocus ? 0x00b7ff : 0xd5d9de,
       );
 
@@ -1334,7 +1334,7 @@ export class SpaceRenderer {
       initiallyVisible,
       1,
       this.highlightRopePhase,
-      isFocusHighlighted ? 0xff8a00 : 0x183a5a,
+      isFocusHighlighted ? 0x000000 : 0x183a5a,
       isFocusHighlighted ? 0x00b7ff : 0xd5d9de,
     );
     entry.searchHighlight.visible = initiallyVisible;
