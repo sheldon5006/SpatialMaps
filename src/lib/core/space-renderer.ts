@@ -151,8 +151,10 @@ interface SpaceNode {
   glass: Graphics;
   /** Small corner badge shown only while selected. */
   checkBadge: Graphics;
-  /** Moving perimeter rope shown for selected/search/focused spaces. */
+  /** Persistent navy/metal rope shown for selected/search matches. */
   searchHighlight: Graphics;
+  /** Temporary black/blue rope shown only during fly-to focus. */
+  focusHighlight: Graphics;
   /** Separate physical cast shadow so it never tints/dims the booth itself. */
   pressShadow: Graphics;
   image?: { sprite: Sprite; url: string };
@@ -509,14 +511,27 @@ export class SpaceRenderer {
         visible,
         focusIntensity,
       );
+
+      // Persistent search/selection rope. During fly-to focus it yields to the
+      // temporary black/blue rope, making the timer visually unambiguous.
       this.drawPerimeterRope(
         entry.searchHighlight,
         space.geometry,
-        visible,
-        focusIntensity,
+        !isFocus && (isSelected || isSearch),
+        1,
         this.highlightRopePhase,
-        isFocus ? 0x000000 : 0x183a5a,
-        isFocus ? 0x00b7ff : 0xd5d9de,
+        0x183a5a,
+        0xd5d9de,
+      );
+
+      this.drawPerimeterRope(
+        entry.focusHighlight,
+        space.geometry,
+        isFocus,
+        1,
+        this.highlightRopePhase,
+        0x000000,
+        0x00b7ff,
       );
 
       // Keep the tiny physical press only while the one-shot transition runs.
@@ -944,9 +959,17 @@ export class SpaceRenderer {
     const searchHighlight = new Graphics();
     searchHighlight.eventMode = 'none';
     searchHighlight.visible = false;
-    // The rope sits above the booth edge, but below labels and badges.
+    // Persistent search/selection rope.
     searchHighlight.zIndex = 4;
     node.addChild(searchHighlight);
+
+    const focusHighlight = new Graphics();
+    focusHighlight.eventMode = 'none';
+    focusHighlight.visible = false;
+    // Temporary fly-to rope sits above the normal rope and disappears when
+    // the focus timer expires.
+    focusHighlight.zIndex = 5;
+    node.addChild(focusHighlight);
 
     const handle = new Graphics();
     handle.eventMode = 'none';
@@ -982,6 +1005,7 @@ export class SpaceRenderer {
       glass,
       checkBadge,
       searchHighlight,
+      focusHighlight,
       pressShadow,
     };
 
@@ -1364,13 +1388,23 @@ export class SpaceRenderer {
     this.drawPerimeterRope(
       entry.searchHighlight,
       geometry,
-      initiallyVisible,
+      !isFocusHighlighted && (isSelected || isSearchHighlighted),
       1,
       this.highlightRopePhase,
-      isFocusHighlighted ? 0x000000 : 0x183a5a,
-      isFocusHighlighted ? 0x00b7ff : 0xd5d9de,
+      0x183a5a,
+      0xd5d9de,
     );
-    entry.searchHighlight.visible = initiallyVisible;
+    this.drawPerimeterRope(
+      entry.focusHighlight,
+      geometry,
+      isFocusHighlighted,
+      1,
+      this.highlightRopePhase,
+      0x000000,
+      0x00b7ff,
+    );
+    entry.searchHighlight.visible = !isFocusHighlighted && (isSelected || isSearchHighlighted);
+    entry.focusHighlight.visible = isFocusHighlighted;
     entry.pressShadow.visible = initiallyVisible;
 
     this.drawHandle(entry.handle, geometry);
