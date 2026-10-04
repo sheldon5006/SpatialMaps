@@ -75,7 +75,9 @@ const FILTER_CONTENT_BLUR = 0.9;
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
 const SELECTED_SCALE = 1.04;
-const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x38bdf8;
+const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x22c55e;
+const SEARCH_HIGHLIGHT_DARK_COLOR = 0x061b10;
+
 const SEARCH_HIGHLIGHT_CORE_COLOR = 0xffffff;
 const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.32;
 const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.98;
@@ -86,7 +88,7 @@ const HIGHLIGHT_OUTER_MIN_ALPHA = 0.16;
 const HIGHLIGHT_OUTER_MAX_ALPHA = 0.42;
 const HIGHLIGHT_MID_MIN_ALPHA = 0.22;
 const HIGHLIGHT_MID_MAX_ALPHA = 0.58;
-const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0xa855f7;
+const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x2dfd78;
 
 export interface CameraSnapshot {
   x: number;
@@ -1405,8 +1407,8 @@ export class SpaceRenderer {
     const minSide = Math.min(width, height);
     if (width <= 2 || height <= 2) return;
 
-    // Several translucent layers with increasing blur approximate a smooth
-    // gradient bloom while keeping the core geometry razor sharp.
+    // Layered neon-green + deep-green bloom gives a gaming-like glow
+    // without turning the booth into a flat fluorescent rectangle.
     const outerPad = 19 + pulse * 6;
     const outerRadius = Math.min(22, Math.max(9, minSide * 0.16));
     highlight.roundRect(
@@ -1417,21 +1419,21 @@ export class SpaceRenderer {
       outerRadius,
     );
     highlight.fill({
-      color,
-      alpha: 0.10 + pulse * 0.12,
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: 0.16 + pulse * 0.10,
     });
 
-    const midPad = 11 + pulse * 3;
+    const midPad = 13 + pulse * 4;
     highlight.roundRect(
       -midPad,
       -midPad,
       width + midPad * 2,
       height + midPad * 2,
-      Math.min(18, outerRadius),
+      Math.min(19, outerRadius),
     );
     highlight.fill({
       color,
-      alpha: 0.16 + pulse * 0.18,
+      alpha: 0.18 + pulse * 0.18,
     });
 
     const innerPad = 5;
@@ -1444,7 +1446,7 @@ export class SpaceRenderer {
     );
     highlight.fill({
       color,
-      alpha: 0.10 + pulse * 0.10,
+      alpha: 0.12 + pulse * 0.12,
     });
 
     // Luminous ring: slightly purple in focus/selection, white core keeps
