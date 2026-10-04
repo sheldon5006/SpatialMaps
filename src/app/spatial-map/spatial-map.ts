@@ -1132,6 +1132,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       // world offset. Fit is allowed to go below the interactive readable
       // minimum so the whole venue remains visible.
       this.engine.camera.fitBounds(undefined, { duration: 0 });
+      // The overview is a browsing start point, not a tiny architectural
+      // thumbnail. Center first, then move to the configured readable base.
+      this.engine.camera.setZoom(this.viewBaseZoom, { duration: 0 });
 
       // Hover/select/mode/transform are discrete, low-frequency events
       // (unlike pan/zoom), so re-entering the Angular zone here is right.
