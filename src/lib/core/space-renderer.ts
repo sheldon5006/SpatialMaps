@@ -698,7 +698,6 @@ export class SpaceRenderer {
         fill: LABEL_COLOR,
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontWeight: '600',
-        resolution: Math.min((window.devicePixelRatio || 1) * 2, 3),
         stroke: { color: LABEL_OUTLINE_COLOR, width: 3 },
         align: 'center',
       },
