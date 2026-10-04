@@ -181,13 +181,6 @@ export class SpaceRenderer {
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
-  /**
-   * Filter receding is now a visual overlay only. There is deliberately no
-   * Pixi BlurFilter here: the liquid-glass appearance comes from the glass
-   * Graphics layers drawn per booth.
-   */
-  private readonly focusFilters: never[] = [];
-
   constructor(
     private readonly world: Container,
     private readonly stage: Container,
@@ -454,7 +447,7 @@ export class SpaceRenderer {
       const recede = this.shouldRecede(id);
 
       // No blur/backdrop filter: the glass is purely the drawn overlay.
-      entry.node.filters = this.focusFilters;
+      entry.node.filters = [];
       entry.node.alpha = 1;
       entry.node.scale.set(isSelected ? SELECTED_SCALE : 1);
       entry.glass.visible = recede;
