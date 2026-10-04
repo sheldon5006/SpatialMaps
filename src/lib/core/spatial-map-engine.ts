@@ -240,6 +240,18 @@ export class SpatialMapEngine {
     return this.renderer?.getMode() ?? 'view';
   }
 
+  /** Returns the current camera transform for host-side nearest-match logic. */
+  getCameraState(): { x: number; y: number; zoom: number } {
+    return this.renderer
+      ? (() => {
+          const snapshot = (this.transitions as CameraTransitions & { camera?: unknown })?.camera;
+          return this.transitions
+            ? this.transitions.getCameraState()
+            : { x: 0, y: 0, zoom: 1 };
+        })()
+      : { x: 0, y: 0, zoom: 1 };
+  }
+
   setVisualFilter(filter: VisualFilter): void {
     this.renderer?.setVisualFilter(filter);
   }
