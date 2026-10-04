@@ -64,6 +64,9 @@ export class SpatialMapEngine {
   private gridEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled;
   private gridSize = DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
   private searchEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled;
+  private focusEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.focus.enabled;
+  private focusDurationMs = DEFAULT_SPATIAL_MAP_SETTINGS.focus.durationMs;
+  private focusColor = DEFAULT_SPATIAL_MAP_SETTINGS.focus.color;
 
   private readonly onTick = (): void => {
     this.transitions?.tick();
@@ -200,6 +203,13 @@ export class SpatialMapEngine {
     this.renderer?.setSearchHighlight(id);
   }
 
+  focusSpace(
+    id: string,
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.renderer?.focusSpace(id, options);
+  }
+
   isSelectable(id: string): boolean {
     const space = this.renderer?.getSpace(id);
     return !!space && (this.renderer?.isSelectable(space) ?? false);
@@ -296,6 +306,11 @@ export class SpatialMapEngine {
       },
       search: {
         enabled: this.searchEnabled,
+      },
+      focus: {
+        enabled: this.focusEnabled,
+        durationMs: this.focusDurationMs,
+        color: this.focusColor,
       },
     };
   }
