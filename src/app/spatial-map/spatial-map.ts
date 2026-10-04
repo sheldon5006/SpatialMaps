@@ -7,6 +7,7 @@ import {
   ViewChild,
 } from '@angular/core';
 import { SpatialMapEngine } from '../../lib/core/spatial-map-engine';
+import { TEST_SPACES } from './test-spaces';
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
@@ -35,8 +36,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   constructor(private readonly zone: NgZone) {}
 
   ngAfterViewInit(): void {
-    this.zone.runOutsideAngular(() => {
-      this.engine.init(this.hostRef.nativeElement);
+    this.zone.runOutsideAngular(async () => {
+      await this.engine.init(this.hostRef.nativeElement);
+      this.engine.loadSpaces(TEST_SPACES);
     });
   }
 
