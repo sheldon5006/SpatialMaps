@@ -408,9 +408,20 @@ export class SpaceRenderer {
       this.startPressTransition(expired, this.selectedIds.has(expired));
     }
 
-    if (this.pressAnimations.size === 0) return;
+    const activeIds = new Set<string>();
+    if (this.searchHighlightedId) activeIds.add(this.searchHighlightedId);
+    if (this.focusHighlightedId && focusWasActive) activeIds.add(this.focusHighlightedId);
+    this.selectedIds.forEach((id) => activeIds.add(id));
 
-    const animatedIds = Array.from(this.pressAnimations.keys());
+    if (activeIds.size === 0 && this.pressAnimations.size === 0) return;
+
+    // Only the perimeter rope loops continuously. The booth itself does not pulse.
+    this.highlightRopePhase = (this.highlightRopePhase + deltaMS * 0.028) % 1;
+
+    const animatedIds = new Set<string>([
+      ...Array.from(this.pressAnimations.keys()),
+      ...Array.from(activeIds),
+    ]);
     animatedIds.forEach((id) => {
       const animation = this.pressAnimations.get(id);
       const entry = this.spaceNodes.get(id);
@@ -443,6 +454,7 @@ export class SpaceRenderer {
         isFocus && !isSelected && !isSearch
           ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
           : 1,
+        this.highlightRopePhase,
       );
       entry.node.scale.set(
         isSelected
@@ -857,7 +869,7 @@ export class SpaceRenderer {
     const searchHighlight = new Graphics();
     searchHighlight.eventMode = 'none';
     searchHighlight.visible = false;
-    searchHighlight.zIndex = -1;
+    searchHighlight.zIndex = 4;
     // Intentionally crisp: the locator uses layered shadow planes, not blur/glow.
     node.addChild(searchHighlight);
 
@@ -1269,6 +1281,7 @@ export class SpaceRenderer {
       isSelected || isSearchHighlighted || isFocusHighlighted,
       isFocusHighlighted ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
       1,
+      this.highlightRopePhase,
     );
     entry.searchHighlight.visible = isSelected || isSearchHighlighted || isFocusHighlighted;
 
@@ -1448,11 +1461,10 @@ export class SpaceRenderer {
   }
 
   /**
-   * Draws a quiet monochrome neumorphic press state.
+   * Draws a subtle neumorphic press shadow plus a slim two-color marching rope.
    *
-   * No glow, bloom, colored edge, scanning light, or brightness pulse.
-   * The only motion is a single physical-looking press into the map surface:
-   * a small soft cast shadow moves down/right and settles.
+   * The shadow remains neutral. Tiny italic neon-blue/grey strokes circulate
+   * around the actual space perimeter. There is no glow or bloom.
    */
   private drawSearchHighlight(
     highlight: Graphics,
@@ -1461,6 +1473,7 @@ export class SpaceRenderer {
     active = true,
     _color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
     intensity = 1,
+    ropePhase = 0,
   ): void {
     highlight.clear();
 
@@ -1473,53 +1486,188 @@ export class SpaceRenderer {
     const strength = Math.max(0, Math.min(1, intensity));
     const radius = Math.min(14, Math.max(5, minSide * 0.12));
 
-    // Small physical displacement: the shadow appears as the booth presses
-    // into the surface. It never becomes a large halo.
-    const depth = 1.5 + press * 3.0;
-    const spread = 1.0 + press * 1.8;
-
-    // Tight contact shadow.
+    // Small physical press shadow behind the booth.
+    const depth = 1.4 + press * 2.5;
+    const spread = 0.8 + press * 1.4;
     highlight.roundRect(
-      depth * 0.45 - spread,
+      depth * 0.5 - spread,
       depth - spread,
       width + spread * 2,
       height + spread * 2,
       radius + spread * 0.35,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
-      alpha: (0.12 + press * 0.18) * strength,
+      color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
+      alpha: (0.15 + press * 0.14) * strength,
     });
 
-    // A smaller secondary shadow softens the contact edge and gives it the
-    // characteristic neumorphic cast-shadow falloff.
-    const soft = 3 + press * 2;
+    const soft = 2.5 + press * 1.5;
     highlight.roundRect(
       depth * 0.35 - soft,
-      depth * 0.75 - soft,
+      depth * 0.72 - soft,
       width + soft * 2,
       height + soft * 2,
       radius + soft * 0.25,
     );
     highlight.fill({
       color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
-      alpha: (0.05 + press * 0.07) * strength,
+      alpha: (0.045 + press * 0.055) * strength,
     });
 
-    // Neutral inset plane: it darkens the inside very slightly so the target
-    // feels pressed into the map instead of illuminated above it.
-    const inset = 1.5 + press * 1.0;
-    if (width > inset * 2 + 2 && height > inset * 2 + 2) {
-      highlight.roundRect(
-        inset,
-        inset,
-        width - inset * 2,
-        height - inset * 2,
-        Math.max(3, radius - 2),
-      );
-      highlight.fill({
-        color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
-        alpha: 0.035 * strength,
+    // Build a perimeter polyline around the local space shape.
+    const inset = 1.2;
+    const points: Array<{ x: number; y: number }> = [];
+    const addLine = (ax: number, ay: number, bx: number, by: number, steps: number): void => {
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        points.push({
+          x: ax + (bx - ax) * t,
+          y: ay + (by - ay) * t,
+        });
+      }
+    };
+
+    if (geometry.type === 'circle' || geometry.type === 'ellipse') {
+      const cx = width / 2;
+      const cy = height / 2;
+      const rx = Math.max(1, width / 2 - inset);
+      const ry = Math.max(1, height / 2 - inset);
+      const steps = 72;
+      for (let i = 0; i <= steps; i += 1) {
+        const angle = (Math.PI * 2 * i) / steps;
+        points.push({
+          x: cx + Math.cos(angle) * rx,
+          y: cy + Math.sin(angle) * ry,
+        });
+      }
+    } else if (geometry.type === 'triangle') {
+      const a = { x: width / 2, y: inset };
+      const b = { x: width - inset, y: height - inset };
+      const d = { x: inset, y: height - inset };
+      addLine(a.x, a.y, b.x, b.y, 18);
+      addLine(b.x, b.y, d.x, d.y, 18);
+      addLine(d.x, d.y, a.x, a.y, 18);
+    } else if (geometry.type === 'diamond') {
+      const a = { x: width / 2, y: inset };
+      const b = { x: width - inset, y: height / 2 };
+      const d = { x: width / 2, y: height - inset };
+      const e = { x: inset, y: height / 2 };
+      addLine(a.x, a.y, b.x, b.y, 14);
+      addLine(b.x, b.y, d.x, d.y, 14);
+      addLine(d.x, d.y, e.x, e.y, 14);
+      addLine(e.x, e.y, a.x, a.y, 14);
+    } else {
+      const r = geometry.type === 'rounded-rectangle'
+        ? Math.min(12, Math.max(2, Math.min(width, height) * 0.14))
+        : Math.min(radius, Math.min(width, height) / 2);
+      const left = inset;
+      const top = inset;
+      const right = Math.max(left, width - inset);
+      const bottom = Math.max(top, height - inset);
+      const cornerSteps = 8;
+
+      addLine(left + r, top, right - r, top, Math.max(2, Math.round(width / 10)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = -Math.PI / 2 + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: right - r + Math.cos(a) * r,
+          y: top + r + Math.sin(a) * r,
+        });
+      }
+      addLine(right, top + r, right, bottom - r, Math.max(2, Math.round(height / 8)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: right - r + Math.cos(a) * r,
+          y: bottom - r + Math.sin(a) * r,
+        });
+      }
+      addLine(right - r, bottom, left + r, bottom, Math.max(2, Math.round(width / 10)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = Math.PI / 2 + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: left + r + Math.cos(a) * r,
+          y: bottom - r + Math.sin(a) * r,
+        });
+      }
+      addLine(left, bottom - r, left, top + r, Math.max(2, Math.round(height / 8)));
+      for (let i = 0; i <= cornerSteps; i += 1) {
+        const a = Math.PI + (Math.PI / 2) * (i / cornerSteps);
+        points.push({
+          x: left + r + Math.cos(a) * r,
+          y: top + r + Math.sin(a) * r,
+        });
+      }
+    }
+
+    const loop: Array<{ x: number; y: number; distance: number }> = [];
+    let perimeter = 0;
+    for (let i = 0; i < points.length - 1; i += 1) {
+      const a = points[i];
+      const b = points[i + 1];
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      if (length < 0.001) continue;
+      loop.push({ ...a, distance: perimeter });
+      perimeter += length;
+    }
+
+    if (loop.length < 2 || perimeter <= 0) return;
+
+    // A thin neutral track gives the rope a physical rail without becoming a border.
+    for (let i = 0; i < loop.length; i += 1) {
+      const a = loop[i];
+      const b = loop[(i + 1) % loop.length];
+      highlight.moveTo(a.x, a.y);
+      highlight.lineTo(b.x, b.y);
+    }
+    highlight.stroke({
+      color: 0x64748b,
+      alpha: 0.24 * strength,
+      width: 0.75,
+    });
+
+    // Tiny italic strokes march around the loop. Two colors alternate to make
+    // the movement easy to perceive without creating a luminous halo.
+    const dashLength = Math.max(4, Math.min(6, minSide * 0.07));
+    const gap = Math.max(3, dashLength * 0.8);
+    const pitch = dashLength + gap;
+    const dashCount = Math.max(8, Math.ceil(perimeter / pitch));
+    const travel = perimeter / dashCount;
+    const slashAngle = Math.PI * 0.26;
+
+    for (let index = 0; index < dashCount; index += 1) {
+      let distance = (index * travel + ropePhase * perimeter) % perimeter;
+      if (distance < 0) distance += perimeter;
+
+      let segmentIndex = 0;
+      while (
+        segmentIndex < loop.length - 1 &&
+        loop[segmentIndex + 1].distance <= distance
+      ) {
+        segmentIndex += 1;
+      }
+
+      const current = loop[segmentIndex];
+      const next = segmentIndex === loop.length - 1
+        ? { ...loop[0], distance: perimeter }
+        : loop[segmentIndex + 1];
+      const span = Math.max(0.001, next.distance - current.distance);
+      const t = Math.max(0, Math.min(1, (distance - current.distance) / span));
+      const cx = current.x + (next.x - current.x) * t;
+      const cy = current.y + (next.y - current.y) * t;
+      const tangent = Math.atan2(next.y - current.y, next.x - current.x);
+      const angle = tangent + slashAngle;
+      const half = dashLength * 0.5;
+      const dx = Math.cos(angle) * half;
+      const dy = Math.sin(angle) * half;
+
+      highlight.moveTo(cx - dx, cy - dy);
+      highlight.lineTo(cx + dx, cy + dy);
+      highlight.stroke({
+        color: index % 2 === 0 ? 0x00d9ff : 0x9ca3af,
+        alpha: 0.90 * strength,
+        width: 1.45,
+        cap: 'round',
       });
     }
   }
