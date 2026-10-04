@@ -195,6 +195,10 @@ export class SpatialMapEngine {
     this.renderer?.setSelectionRule(rule);
   }
 
+  setSearchHighlight(id: string | null): void {
+    this.renderer?.setSearchHighlight(id);
+  }
+
   isSelectable(id: string): boolean {
     const space = this.renderer?.getSpace(id);
     return !!space && (this.renderer?.isSelectable(space) ?? false);
