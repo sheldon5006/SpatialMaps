@@ -353,7 +353,11 @@ export class SpaceRenderer {
   /** Merges `patch` into an existing space's geometry/properties and repaints/repositions it. */
   updateSpace(
     id: string,
-    patch: { geometry?: Partial<Space['geometry']>; properties?: Partial<Space['properties']> },
+    patch: {
+      type?: Space['type'];
+      geometry?: Partial<Space['geometry']>;
+      properties?: Partial<Space['properties']>;
+    },
   ): void {
     const existing = this.spaceData.get(id);
     const entry = this.spaceNodes.get(id);
@@ -364,6 +368,7 @@ export class SpaceRenderer {
 
     const merged: Space = {
       ...existing,
+      type: patch.type ?? existing.type,
       geometry: { ...existing.geometry, ...patch.geometry },
       properties: { ...existing.properties, ...patch.properties },
     };
@@ -941,14 +946,19 @@ export class SpaceRenderer {
     }
 
 
-    // Image fills currently support rectangles only; non-rectangular
-    // geometry keeps its status fill until shape masking is introduced.
-    entry.shape.fill({
-      color: style.fill,
-      alpha: hasImage && geometry.type === 'rectangle' ? 0 : (style.fillAlpha ?? 1),
-    });
+    if (space.type === 'booth') {
+      // Image fills currently support rectangles only.
+      entry.shape.fill({
+        color: style.fill,
+        alpha: hasImage && geometry.type === 'rectangle' ? 0 : (style.fillAlpha ?? 1),
+      });
 
-    if (style.strokeWidth) {
+      if (style.strokeWidth) {
+        entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
+      }
+    } else if (style.strokeWidth) {
+      // Context elements use their own symbol colors; only add the selection/
+      // hover outline from the common interaction state.
       entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
     }
 
