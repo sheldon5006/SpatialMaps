@@ -1,5 +1,4 @@
 import { DecimalPipe } from '@angular/common';
-import { DecimalPipe } from '@angular/common';
 import {
   AfterViewInit,
   Component,
