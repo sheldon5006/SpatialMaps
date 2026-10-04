@@ -250,7 +250,7 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
               <input
                 type="search"
                 [ngModel]="searchQuery()"
-                (ngModelChange)="searchQuery.set($event)"
+                (ngModelChange)="onSearchQueryChange($event)"
                 placeholder="Search booth name or ID..."
                 autocomplete="off"
               />
@@ -1741,24 +1741,27 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.searchableSpaces().filter((space) => space.type === 'booth'),
   );
 
-  protected readonly searchResults = computed(() => {
+  /** All matches are kept for map highlighting; the list is capped only for UI density. */
+  protected readonly searchMatches = computed(() => {
     const query = this.searchQuery().trim().toLowerCase();
-    const booths = this.searchableBooths();
-
-    if (!query) return booths.slice(0, 12);
+    if (!query) return [];
 
     const terms = query.split(/\s+/).filter(Boolean);
-    return booths
-      .filter((space) => {
-        const haystack = [
-          space.id,
-          space.properties.name ?? '',
-          space.properties.status ?? '',
-          this.statusLabel(space.properties.status),
-        ].join(' ').toLowerCase();
-        return terms.every((term) => haystack.includes(term));
-      })
-      .slice(0, 20);
+    return this.searchableBooths().filter((space) => {
+      const haystack = [
+        space.id,
+        space.properties.name ?? '',
+        space.properties.status ?? '',
+        this.statusLabel(space.properties.status),
+      ].join(' ').toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
+  });
+
+  protected readonly searchResults = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    if (!query) return this.searchableBooths().slice(0, 12);
+    return this.searchMatches().slice(0, 20);
   });
 
   protected readonly searchableSpaces = signal<Space[]>([]);
@@ -2173,10 +2176,86 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.searchListOpen.update((open) => !open);
   }
 
+  protected onSearchQueryChange(query: string): void {
+    this.searchQuery.set(query);
+    const trimmed = query.trim();
+
+    if (!trimmed) {
+      this.searchHighlightedId.set(null);
+      this.engine.setSearchHighlights([]);
+      this.engine.focusSpaces([]);
+      return;
+    }
+
+    const matches = this.searchMatches();
+    const ids = matches.map((space) => space.id);
+
+    // Every matching booth is highlighted on every keystroke.
+    this.searchHighlightedId.set(matches.length === 1 ? matches[0].id : null);
+    this.engine.setSearchHighlights(ids);
+
+    // A single result, or a tight spatial cluster of results, gets the
+    // temporary black/blue fly-to locator. The camera targets the match nearest
+    // the current viewport center rather than arbitrarily choosing the first hit.
+    if (matches.length > 0 && (matches.length === 1 || this.isSearchCluster(matches))) {
+      const nearest = this.nearestSearchMatch(matches);
+      this.engine.camera.flyTo(nearest.id, {
+        padding: MAP_VIEW_PADDING,
+        maxZoom: 1.8,
+        duration: 450,
+      });
+
+      if (this.focusEnabled && this.focusDurationMs > 0) {
+        this.engine.focusSpaces(ids, {
+          durationMs: this.focusDurationMs,
+          color: '#111827',
+        });
+      }
+    } else {
+      this.engine.focusSpaces([]);
+    }
+  }
+
+  private isSearchCluster(matches: Space[]): boolean {
+    if (matches.length <= 1) return true;
+
+    const centers = matches.map((space) => ({
+      x: space.geometry.x + space.geometry.width / 2,
+      y: space.geometry.y + space.geometry.height / 2,
+    }));
+    const centerX = centers.reduce((sum, point) => sum + point.x, 0) / centers.length;
+    const centerY = centers.reduce((sum, point) => sum + point.y, 0) / centers.length;
+
+    return centers.every((point) =>
+      Math.hypot(point.x - centerX, point.y - centerY) <= 320,
+    );
+  }
+
+  private nearestSearchMatch(matches: Space[]): Space {
+    const camera = this.engine.getCameraState();
+    const viewportWidth = Math.max(1, this.hostRef.nativeElement.clientWidth);
+    const viewportHeight = Math.max(1, this.hostRef.nativeElement.clientHeight);
+    const viewportCenterX = (viewportWidth / 2 - camera.x) / camera.zoom;
+    const viewportCenterY = (viewportHeight / 2 - camera.y) / camera.zoom;
+
+    return matches.reduce((nearest, space) => {
+      const currentX = space.geometry.x + space.geometry.width / 2;
+      const currentY = space.geometry.y + space.geometry.height / 2;
+      const nearestX = nearest.geometry.x + nearest.geometry.width / 2;
+      const nearestY = nearest.geometry.y + nearest.geometry.height / 2;
+
+      return Math.hypot(currentX - viewportCenterX, currentY - viewportCenterY) <
+        Math.hypot(nearestX - viewportCenterX, nearestY - viewportCenterY)
+        ? space
+        : nearest;
+    });
+  }
+
   protected clearSearch(): void {
     this.searchQuery.set('');
     this.searchHighlightedId.set(null);
-    this.engine.setSearchHighlight(null);
+    this.engine.setSearchHighlights([]);
+    this.engine.focusSpaces([]);
   }
 
   protected setSearchEnabled(enabled: boolean): void {
@@ -2204,18 +2283,39 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
-    // A search-result click is a fly-to focus, so use the temporary focus rope
-    // rather than the persistent search-highlight state. The rope therefore
-    // disappears when the 1.5s fly-to focus timer expires.
-    this.setSearchHighlight(null);
+    const query = this.searchQuery().trim();
+    const matches = query
+      ? this.searchMatches()
+      : (() => {
+          const space = this.engine.getSpace(id);
+          return space ? [space] : [];
+        })();
 
-    // Keep the target booth in the visible map area rather than centering it
-    // underneath the persistent search panel.
-    this.flyTo(id, {
-      padding: MAP_VIEW_PADDING,
-      maxZoom: 1.8,
-      duration: 450,
-    });
+    if (matches.length > 0) {
+      const ids = matches.map((space) => space.id);
+      this.engine.setSearchHighlights(ids);
+      this.searchHighlightedId.set(id);
+
+      const target = query && (matches.length === 1 || this.isSearchCluster(matches))
+        ? this.nearestSearchMatch(matches)
+        : this.engine.getSpace(id);
+
+      if (target) {
+        this.engine.camera.flyTo(target.id, {
+          padding: MAP_VIEW_PADDING,
+          maxZoom: 1.8,
+          duration: 450,
+        });
+      }
+
+      if (this.focusEnabled && this.focusDurationMs > 0) {
+        this.engine.focusSpaces(ids, {
+          durationMs: this.focusDurationMs,
+          color: '#111827',
+        });
+      }
+    }
+
     this.searchResultClick.emit(id);
   }
 
