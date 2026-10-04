@@ -682,13 +682,23 @@ export class SpaceRenderer {
     entry.label.position.set(width / 2, height / 2);
   }
 
-  /** The translucent pane shown over a receded (filter-receded) space. */
+  /** Draws a subtle frosted-glass overlay for booths receded by an active filter. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
+    const { width, height } = geometry;
+    glass.clear();
+
     glass
-      .clear()
-      .rect(0, 0, geometry.width, geometry.height)
-      .fill({ color: GLASS_TINT_COLOR, alpha: GLASS_TINT_ALPHA })
-      .stroke({ color: GLASS_EDGE_COLOR, width: 1, alpha: GLASS_EDGE_ALPHA });
+      .rect(0, 0, width, height)
+      .fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA })
+      .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1, alpha: FILTER_GLASS_RIM_ALPHA });
+
+    // A minimal top sheen creates the glass cue without obscuring booth labels.
+    if (width > 4 && height > 4) {
+      glass
+        .moveTo(2, 2)
+        .lineTo(width - 2, 2)
+        .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1, alpha: FILTER_GLASS_SHEEN_ALPHA });
+    }
   }
 
   /** Small corner check badge shown while selected — selection stays
