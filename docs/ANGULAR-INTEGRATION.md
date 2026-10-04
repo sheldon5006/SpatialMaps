@@ -298,6 +298,14 @@ onSearchResultClick(id: string): void {
 
 The search panel is a navigation aid; it does not replace the normal map selection/filter workflow.
 
+A search result can also be highlighted directly from application code:
+
+~~~~ts
+this.map.setSearchHighlight('A101');
+~~~~
+
+Pass `null` to clear it.
+
 
 ## Search panel setting
 
