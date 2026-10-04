@@ -123,6 +123,7 @@ function defaultFormState(): SpaceFormState {
  *  now) — so only the drawer needs accounting for here. */
 const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 const MAP_VIEW_PADDING = { top: 24, right: 24, bottom: 24, left: 24 };
+const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
