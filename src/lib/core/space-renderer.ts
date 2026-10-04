@@ -81,7 +81,7 @@ const SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR = 0x020617;
 const SEARCH_HIGHLIGHT_LIGHT_COLOR = 0xffffff;
 const SEARCH_HIGHLIGHT_INSET_COLOR = 0x334155;
 
-const HIGHLIGHT_PRESS_SPEED = 0.00072;
+const PRESS_ANIMATION_DURATION_MS = 220;
 const HIGHLIGHT_FOCUS_FADE_MS = 320;
 const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x111827;
 
@@ -194,8 +194,9 @@ export class SpaceRenderer {
   private focusHighlightUntil = 0;
   private focusHighlightStartedAt = 0;
   private focusHighlightColor = DEFAULT_FOCUS_HIGHLIGHT_COLOR;
-  private highlightPulseTime = 0;
   private readonly selectedIds = new Set<string>();
+  /** One-shot press/release transitions. No looping pulse or glow animation. */
+  private readonly pressAnimations = new Map<string, { progress: number; target: number }>();
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
   private mode: MapMode = 'view';
@@ -361,8 +362,14 @@ export class SpaceRenderer {
     const previous = this.searchHighlightedId;
     this.searchHighlightedId = id;
 
-    if (previous) this.repaint(previous);
-    if (id) this.repaint(id);
+    if (previous) {
+      this.startPressTransition(previous, this.selectedIds.has(previous) || this.focusHighlightedId === previous);
+      this.repaint(previous);
+    }
+    if (id) {
+      this.startPressTransition(id, true);
+      this.repaint(id);
+    }
   }
 
   /**
@@ -377,6 +384,7 @@ export class SpaceRenderer {
     this.focusHighlightedId = id;
     this.focusHighlightStartedAt = performance.now();
     this.focusHighlightUntil = performance.now() + durationMs;
+    this.startPressTransition(id, true);
     this.focusHighlightColor = this.parsePropColor(
       options?.color,
       DEFAULT_FOCUS_HIGHLIGHT_COLOR,
@@ -384,7 +392,7 @@ export class SpaceRenderer {
     this.repaint(id);
   }
 
-  /** Drives the polished locator animation used by search, focus and selection. */
+  /** Advances one-shot pressed-state transitions. There is no looping glow/pulse. */
   tick(deltaMS: number): void {
     const now = performance.now();
     const focusRemaining =
@@ -398,52 +406,60 @@ export class SpaceRenderer {
       this.focusHighlightedId = null;
       this.focusHighlightUntil = 0;
       this.focusHighlightStartedAt = 0;
-      this.repaint(expired);
+      this.startPressTransition(expired, this.selectedIds.has(expired));
     }
 
-    if (
-      this.searchHighlightedId === null &&
-      this.focusHighlightedId === null &&
-      this.selectedIds.size === 0
-    ) {
-      return;
-    }
+    if (this.pressAnimations.size === 0) return;
 
-    this.highlightPulseTime += deltaMS;
-    // Animate depth, not brightness: the control gently settles in and out like
-    // a modern neumorphic button under the user's focus.
-    const press =
-      0.5 + 0.5 * Math.sin(this.highlightPulseTime * HIGHLIGHT_PRESS_SPEED);
-
-    const touched = new Set<string>();
-    if (this.searchHighlightedId) touched.add(this.searchHighlightedId);
-    if (this.focusHighlightedId) touched.add(this.focusHighlightedId);
-    this.selectedIds.forEach((id) => touched.add(id));
-
-    touched.forEach((id) => {
+    const animatedIds = Array.from(this.pressAnimations.keys());
+    animatedIds.forEach((id) => {
+      const animation = this.pressAnimations.get(id);
       const entry = this.spaceNodes.get(id);
       const space = this.spaceData.get(id);
-      if (!entry || !space) return;
-
-      const isSelected = this.selectedIds.has(id);
-      const isFocus =
-        this.focusHighlightedId === id && focusWasActive;
-      const isSearch = this.searchHighlightedId === id;
-
-      let intensity = 1;
-      if (isFocus && !isSelected && !isSearch) {
-        const fadeStart = HIGHLIGHT_FOCUS_FADE_MS;
-        intensity = Math.min(1, Math.max(0, focusRemaining / fadeStart));
+      if (!animation || !entry || !space) {
+        this.pressAnimations.delete(id);
+        return;
       }
+
+      const frame = Math.max(0, Math.min(1, deltaMS / PRESS_ANIMATION_DURATION_MS));
+      const eased = 1 - Math.pow(1 - frame, 3);
+      animation.progress += (animation.target - animation.progress) * eased;
+
+      if (Math.abs(animation.target - animation.progress) < 0.001) {
+        animation.progress = animation.target;
+        this.pressAnimations.delete(id);
+      }
+
+      const isSearch = this.searchHighlightedId === id;
+      const isFocus = this.focusHighlightedId === id && focusWasActive;
+      const isSelected = this.selectedIds.has(id);
+      const visible = isSelected || isSearch || isFocus;
 
       this.drawSearchHighlight(
         entry.searchHighlight,
         space.geometry,
-        press,
-        intensity > 0,
-        isFocus ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
-        intensity,
+        animation.progress,
+        visible,
+        DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+        isFocus && !isSelected && !isSearch
+          ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
+          : 1,
       );
+      entry.searchHighlight.visible = visible;
+    });
+  }
+
+  /** Starts a single smooth press/release transition. Reaching rest removes
+   * the animation state, so a selected booth stays visually still. */
+  private startPressTransition(id: string, pressed: boolean): void {
+    const current = this.pressAnimations.get(id)?.progress ??
+      ((this.selectedIds.has(id) ||
+        this.searchHighlightedId === id ||
+        this.focusHighlightedId === id) ? 1 : 0);
+
+    this.pressAnimations.set(id, {
+      progress: current,
+      target: pressed ? 1 : 0,
     });
   }
 
@@ -599,6 +615,7 @@ export class SpaceRenderer {
 
     if (!selected) {
       this.selectedIds.delete(id);
+      this.startPressTransition(id, false);
       this.repaint(id);
       this.updateFocusEffect();
       this.events.emit('select', Array.from(this.selectedIds));
@@ -614,8 +631,13 @@ export class SpaceRenderer {
       this.selectedIds.clear();
       this.selectedIds.add(id);
 
-      // Repaint the old selection so its selection ring/badge disappears.
-      previouslySelected.forEach((selectedId) => this.repaint(selectedId));
+      // Repaint the old selection so its selection ring/badge disappears and
+      // start a smooth release/press transition for both.
+      previouslySelected.forEach((selectedId) => {
+        this.startPressTransition(selectedId, false);
+        this.repaint(selectedId);
+      });
+      this.startPressTransition(id, true);
       this.repaint(id);
       this.updateFocusEffect();
       this.events.emit('select', Array.from(this.selectedIds));
@@ -627,6 +649,7 @@ export class SpaceRenderer {
     if (!this.isSelectable(space)) return;
 
     this.selectedIds.add(id);
+    this.startPressTransition(id, true);
     this.repaint(id);
     this.updateFocusEffect();
     this.events.emit('select', Array.from(this.selectedIds));
@@ -636,7 +659,10 @@ export class SpaceRenderer {
     if (this.selectedIds.size === 0) return;
     const previouslySelected = Array.from(this.selectedIds);
     this.selectedIds.clear();
-    previouslySelected.forEach((id) => this.repaint(id));
+    previouslySelected.forEach((id) => {
+      this.startPressTransition(id, false);
+      this.repaint(id);
+    });
     this.updateFocusEffect();
     this.events.emit('select', []);
   }
@@ -819,7 +845,7 @@ export class SpaceRenderer {
     const searchHighlight = new Graphics();
     searchHighlight.eventMode = 'none';
     searchHighlight.visible = false;
-    searchHighlight.zIndex = 4;
+    searchHighlight.zIndex = -1;
     // Intentionally crisp: the locator uses layered shadow planes, not blur/glow.
     node.addChild(searchHighlight);
 
@@ -1226,7 +1252,8 @@ export class SpaceRenderer {
     this.drawSearchHighlight(
       entry.searchHighlight,
       geometry,
-      0.5,
+      this.pressAnimations.get(space.id)?.progress ??
+        (isSelected || isSearchHighlighted || isFocusHighlighted ? 1 : 0),
       isSelected || isSearchHighlighted || isFocusHighlighted,
       isFocusHighlighted ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
       1,
@@ -1409,16 +1436,16 @@ export class SpaceRenderer {
   }
 
   /**
-   * Draws a monochrome neumorphic pressed-control locator.
+   * Draws a quiet monochrome neumorphic press state.
    *
-   * There is deliberately NO blue, glow, bloom, blur, or luminous scan.
-   * The interaction is communicated purely through depth: a soft cast
-   * shadow appears behind the booth, then the booth subtly sinks into it.
+   * No glow, bloom, colored edge, scanning light, or brightness pulse.
+   * The only motion is a single physical-looking press into the map surface:
+   * a small soft cast shadow moves down/right and settles.
    */
   private drawSearchHighlight(
     highlight: Graphics,
     geometry: Space['geometry'],
-    press = 0.5,
+    press = 1,
     active = true,
     _color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
     intensity = 1,
@@ -1434,64 +1461,42 @@ export class SpaceRenderer {
     const strength = Math.max(0, Math.min(1, intensity));
     const radius = Math.min(14, Math.max(5, minSide * 0.12));
 
-    // The animation changes geometry/depth, not brightness. The booth
-    // gently settles into the surface like a real pressed control.
-    const depth = 3.0 + press * 3.5;
-    const shadowSpread = 2.5 + press * 1.5;
-    const lift = 1.4 + (1 - press) * 1.4;
+    // Small physical displacement: the shadow appears as the booth presses
+    // into the surface. It never becomes a large halo.
+    const depth = 1.5 + press * 3.0;
+    const spread = 1.0 + press * 1.8;
 
-    // Broad cast shadow, offset down/right. This is the primary visual cue.
+    // Tight contact shadow.
     highlight.roundRect(
-      depth * 0.55 - shadowSpread,
-      depth - shadowSpread,
-      width + shadowSpread * 2,
-      height + shadowSpread * 2,
-      radius + shadowSpread * 0.4,
+      depth * 0.45 - spread,
+      depth - spread,
+      width + spread * 2,
+      height + spread * 2,
+      radius + spread * 0.35,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
-      alpha: 0.30 * strength,
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: (0.12 + press * 0.18) * strength,
     });
 
-    // Tighter, softer contact shadow directly under the pressed control.
-    const contact = 1.5 + press * 1.5;
+    // A smaller secondary shadow softens the contact edge and gives it the
+    // characteristic neumorphic cast-shadow falloff.
+    const soft = 3 + press * 2;
     highlight.roundRect(
-      contact * 0.35 - 1,
-      contact - 1,
-      width + 2,
-      height + 2,
-      radius + 0.8,
+      depth * 0.35 - soft,
+      depth * 0.75 - soft,
+      width + soft * 2,
+      height + soft * 2,
+      radius + soft * 0.25,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
-      alpha: 0.34 * strength,
+      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      alpha: (0.05 + press * 0.07) * strength,
     });
 
-    // Very restrained upper-left relief edge. This creates the classic
-    // neumorphic light/shadow pair without making the booth look illuminated.
-    highlight.roundRect(
-      -lift,
-      -lift,
-      width + lift * 2,
-      height + lift * 2,
-      radius + lift * 0.45,
-    );
-    highlight.stroke({
-      color: SEARCH_HIGHLIGHT_LIGHT_COLOR,
-      alpha: 0.34 * strength,
-      width: 1.4,
-    });
-
-    // Neutral pressed surface. It is intentionally translucent so the
-    // booth's actual status color remains completely unchanged.
-    highlight.roundRect(0, 0, width, height, radius);
-    highlight.fill({
-      color: SEARCH_HIGHLIGHT_INSET_COLOR,
-      alpha: 0.05 * strength,
-    });
-
-    // Inset edge: pushes the highlighted booth visually into the map.
-    const inset = 2 + press * 1.2;
+    // Neutral inset plane: it darkens the inside very slightly so the target
+    // feels pressed into the map instead of illuminated above it.
+    const inset = 1.5 + press * 1.0;
     if (width > inset * 2 + 2 && height > inset * 2 + 2) {
       highlight.roundRect(
         inset,
@@ -1501,35 +1506,10 @@ export class SpaceRenderer {
         Math.max(3, radius - 2),
       );
       highlight.fill({
-        color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
-        alpha: 0.10 * strength,
-      });
-
-      // Inner lower/right shadow.
-      highlight.moveTo(inset + 2, height - inset - 1);
-      highlight.lineTo(width - inset - 2, height - inset - 1);
-      highlight.moveTo(width - inset - 1, inset + 2);
-      highlight.lineTo(width - inset - 1, height - inset - 2);
-      highlight.stroke({
         color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
-        alpha: 0.30 * strength,
-        width: 1.3,
-      });
-
-      // Inner upper/left highlight — the inverse edge of the same inset.
-      highlight.moveTo(inset + 2, inset + 1);
-      highlight.lineTo(width - inset - 3, inset + 1);
-      highlight.moveTo(inset + 1, inset + 2);
-      highlight.lineTo(inset + 1, height - inset - 3);
-      highlight.stroke({
-        color: SEARCH_HIGHLIGHT_LIGHT_COLOR,
-        alpha: 0.22 * strength,
-        width: 1.0,
+        alpha: 0.035 * strength,
       });
     }
-
-    // No bright border. The target should look physically pressed, not selected
-    // by a colored neon outline.
   }
   /** Draws a liquid-glass surface matching the receded vector geometry. */
 
