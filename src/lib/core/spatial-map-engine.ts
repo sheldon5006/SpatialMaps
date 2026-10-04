@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_SPATIAL_MAP_SETTINGS,
   SpatialMapSettings,
+  SpatialMapSettingsPatch,
 } from './spatial-map-settings';
 
 export type SpatialMapEngineEvents = SpaceRendererEvents;
@@ -246,7 +247,7 @@ export class SpatialMapEngine {
     this.renderer?.setGridSize(this.gridSize);
   }
 
-  setSettings(settings: Partial<SpatialMapSettings>): void {
+  setSettings(settings: SpatialMapSettingsPatch): void {
     const nextZoom = {
       minZoom: settings.zoom?.minZoom ?? this.cameraLimits.minZoom,
       baseZoom: settings.zoom?.baseZoom ?? this.baseZoom,
