@@ -28,6 +28,7 @@ const iconImage = (
     | 'info'
     | 'firstaid'
     | 'stage'
+    | 'tree'
     | 'entrance'
     | 'food'
     | 'atm',
@@ -54,6 +55,12 @@ const iconImage = (
       <rect x="13" y="17" width="46" height="38" rx="8" fill="#34434b"/>
       <path d="M19 48 L29 36 L37 43 L46 29 L57 48 Z" fill="#e4b45f"/>
       <path d="M23 55 H49" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
+    tree: `
+      <rect x="32" y="40" width="8" height="17" rx="3" fill="#80512d"/>
+      <circle cx="36" cy="32" r="21" fill="#2e7f3f"/>
+      <circle cx="24" cy="37" r="13" fill="#4c9945"/>
+      <circle cx="48" cy="38" r="13" fill="#57a64f"/>
+      <circle cx="35" cy="21" r="12" fill="#63ae56"/>`,
     entrance: `
       <path d="M9 49 L36 12 L63 49 Z" fill="#2e8b5c"/>
       <path d="M22 43 H50 M36 28 V43 M29 35 H43"
@@ -330,17 +337,17 @@ export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
   // 6. Exactly 6 trees
   // ------------------------------------------------------------------------
-  imageProp('tree-1', 'Tree', 306, 318, 54, 54, iconImage('stage')),
-  imageProp('tree-2', 'Tree', 1020, 318, 54, 54, iconImage('stage')),
-  imageProp('tree-3', 'Tree', 300, 500, 54, 54, iconImage('stage')),
-  imageProp('tree-4', 'Tree', 1060, 500, 54, 54, iconImage('stage')),
-  imageProp('tree-5', 'Tree', 470, 650, 54, 54, iconImage('stage')),
-  imageProp('tree-6', 'Tree', 900, 650, 54, 54, iconImage('stage')),
+  imageProp('tree-1', 'Tree', 306, 318, 54, 54, iconImage('tree')),
+  imageProp('tree-2', 'Tree', 1020, 318, 54, 54, iconImage('tree')),
+  imageProp('tree-3', 'Tree', 300, 500, 54, 54, iconImage('tree')),
+  imageProp('tree-4', 'Tree', 1060, 500, 54, 54, iconImage('tree')),
+  imageProp('tree-5', 'Tree', 470, 650, 54, 54, iconImage('tree')),
+  imageProp('tree-6', 'Tree', 900, 650, 54, 54, iconImage('tree')),
 
   // ------------------------------------------------------------------------
   // 7. Four entry / exit points
   // ------------------------------------------------------------------------
-  imageProp('north-entry', 'North Entry', 674, 92, 58, 58, iconImage('entrance')),
+  imageProp('north-entry', 'North Entry', 671, 42, 58, 58, iconImage('entrance')),
   imageProp('west-entry', 'West Entry', 74, 448, 58, 58, iconImage('entrance')),
   imageProp('east-entry', 'East Exit', 1268, 448, 58, 58, iconImage('entrance')),
   imageProp('south-exit', 'South Exit', 674, 782, 58, 58, iconImage('entrance')),
@@ -354,7 +361,7 @@ export const TEST_SPACES: Space[] = [
   textbox('river-title', 'RIVERSIDE ROW', 952, 548, 190, 28),
   textbox('craft-title', 'CRAFT WALK', 430, 688, 150, 26),
   textbox('family-title', 'FAMILY MARKET', 844, 688, 190, 26),
-  textbox('north-entry-label', 'NORTH ENTRY', 624, 100, 160, 24),
+  textbox('north-entry-label', 'NORTH ENTRY', 624, 96, 160, 24),
   textbox('west-entry-label', 'WEST ENTRY', 40, 410, 130, 24, -90),
   textbox('east-entry-label', 'EAST EXIT', 1232, 412, 130, 24, 90),
   textbox('south-exit-label', 'SOUTH EXIT', 624, 828, 160, 24),
