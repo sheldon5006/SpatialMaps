@@ -139,7 +139,11 @@ export class SpatialMapEngine {
 
   updateSpace(
     id: string,
-    patch: { geometry?: Partial<Space['geometry']>; properties?: Partial<Space['properties']> },
+    patch: {
+      type?: Space['type'];
+      geometry?: Partial<Space['geometry']>;
+      properties?: Partial<Space['properties']>;
+    },
   ): void {
     this.renderer?.updateSpace(id, patch);
   }
