@@ -13,6 +13,7 @@ import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
+  SpacePropKind,
   SpaceStatus,
   StatusStyle,
   StatusStyleMap,
@@ -101,6 +102,7 @@ export type VisualFilter =
 export type SelectionRule = (space: Space) => boolean;
 
 const DEFAULT_SELECTION_RULE: SelectionRule = (space) => {
+  if (space.type !== 'booth') return false;
   const status = space.properties.status;
   return status === 'available' || status === 'reserved';
 };
@@ -519,9 +521,16 @@ export class SpaceRenderer {
 
   private shouldRecede(id: string): boolean {
     if (this.visualFilter.type === 'all') return false;
-    if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
+
     const space = this.spaceData.get(id);
-    return space?.properties.status !== this.visualFilter.status;
+    if (!space) return false;
+
+    // Infrastructure and props are background/context elements, so they
+    // always recede under any active filter. "All" remains fully crisp.
+    if (space.type !== 'booth') return true;
+
+    if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
+    return space.properties.status !== this.visualFilter.status;
   }
 
   destroy(): void {
@@ -711,61 +720,67 @@ export class SpaceRenderer {
     const style = this.applyInteractionState(space, baseStyle);
     const hasImage = typeof properties.imageUrl === 'string' && properties.imageUrl.length > 0;
 
-    // Draw the selected vector geometry.
+    // Draw booths using their selected vector geometry. Infrastructure
+    // and props use a lightweight map-symbol renderer instead.
     entry.shape.clear();
 
-    switch (geometry.type) {
-      case 'circle': {
-        const radius = Math.min(geometry.width, geometry.height) / 2;
-        entry.shape.circle(geometry.width / 2, geometry.height / 2, radius);
-        break;
+    if (space.type !== 'booth') {
+      this.drawContextElement(entry.shape, space, geometry.width, geometry.height);
+    } else {
+      switch (geometry.type) {
+        case 'circle': {
+          const radius = Math.min(geometry.width, geometry.height) / 2;
+          entry.shape.circle(geometry.width / 2, geometry.height / 2, radius);
+          break;
+        }
+        case 'ellipse':
+          entry.shape.ellipse(
+            geometry.width / 2,
+            geometry.height / 2,
+            geometry.width / 2,
+            geometry.height / 2,
+          );
+          break;
+        case 'rounded-rectangle':
+          entry.shape.roundRect(
+            0,
+            0,
+            geometry.width,
+            geometry.height,
+            Math.min(16, Math.min(geometry.width, geometry.height) * 0.18),
+          );
+          break;
+        case 'triangle':
+          entry.shape.poly([
+            geometry.width / 2, 0,
+            geometry.width, geometry.height,
+            0, geometry.height,
+          ]);
+          break;
+        case 'diamond':
+          entry.shape.poly([
+            geometry.width / 2, 0,
+            geometry.width, geometry.height / 2,
+            geometry.width / 2, geometry.height,
+            0, geometry.height / 2,
+          ]);
+          break;
+        case 'line':
+          entry.shape.roundRect(
+            0,
+            0,
+            geometry.width,
+            Math.max(2, geometry.height),
+            Math.max(1, geometry.height / 2),
+          );
+          break;
+        case 'rectangle':
+        default:
+          entry.shape.rect(0, 0, geometry.width, geometry.height);
+          break;
       }
-      case 'ellipse':
-        entry.shape.ellipse(
-          geometry.width / 2,
-          geometry.height / 2,
-          geometry.width / 2,
-          geometry.height / 2,
-        );
-        break;
-      case 'rounded-rectangle':
-        entry.shape.roundRect(
-          0,
-          0,
-          geometry.width,
-          geometry.height,
-          Math.min(16, Math.min(geometry.width, geometry.height) * 0.18),
-        );
-        break;
-      case 'triangle':
-        entry.shape.poly([
-          geometry.width / 2, 0,
-          geometry.width, geometry.height,
-          0, geometry.height,
-        ]);
-        break;
-      case 'diamond':
-        entry.shape.poly([
-          geometry.width / 2, 0,
-          geometry.width, geometry.height / 2,
-          geometry.width / 2, geometry.height,
-          0, geometry.height / 2,
-        ]);
-        break;
-      case 'line':
-        entry.shape.roundRect(
-          0,
-          0,
-          geometry.width,
-          Math.max(2, geometry.height),
-          Math.max(1, geometry.height / 2),
-        );
-        break;
-      case 'rectangle':
-      default:
-        entry.shape.rect(0, 0, geometry.width, geometry.height);
-        break;
     }
+
 
     // Image fills currently support rectangles only; non-rectangular
     // geometry keeps its status fill until shape masking is introduced.
@@ -790,6 +805,124 @@ export class SpaceRenderer {
     entry.handle.visible = showHandle;
     entry.handle.eventMode = showHandle ? 'static' : 'none';
     entry.node.addChild(entry.handle); // keep the handle above the label/image
+  }
+
+  /** Draws simple vector symbols for infrastructure and prop elements. */
+  private drawContextElement(
+    shape: Graphics,
+    space: Space,
+    width: number,
+    height: number,
+  ): void {
+    const kind = space.properties.propKind as SpacePropKind | undefined;
+
+    switch (kind) {
+      case 'tree':
+        shape
+          .rect(width * 0.44, height * 0.52, width * 0.12, height * 0.35)
+          .fill({ color: 0x76553a, alpha: 1 });
+        shape
+          .circle(width * 0.5, height * 0.38, Math.min(width, height) * 0.24)
+          .fill({ color: 0x3f8f3c, alpha: 1 });
+        shape
+          .circle(width * 0.35, height * 0.45, Math.min(width, height) * 0.16)
+          .fill({ color: 0x4fae45, alpha: 0.95 });
+        shape
+          .circle(width * 0.65, height * 0.45, Math.min(width, height) * 0.16)
+          .fill({ color: 0x4fae45, alpha: 0.95 });
+        break;
+
+      case 'road':
+        shape
+          .roundRect(0, height * 0.2, width, height * 0.6, Math.min(10, height * 0.3))
+          .fill({ color: 0x59616b, alpha: 0.95 });
+        shape
+          .moveTo(width * 0.08, height * 0.5)
+          .lineTo(width * 0.92, height * 0.5)
+          .stroke({ color: 0xf5f5f5, width: Math.max(1, height * 0.08), alpha: 0.8 });
+        break;
+
+      case 'path':
+        shape
+          .roundRect(0, height * 0.28, width, height * 0.44, Math.min(8, height * 0.22))
+          .fill({ color: 0xcabfae, alpha: 0.95 });
+        break;
+
+      case 'parking':
+        shape
+          .roundRect(0, 0, width, height, Math.min(8, Math.min(width, height) * 0.15))
+          .fill({ color: 0x7f8790, alpha: 0.9 });
+        shape
+          .stroke({ color: 0xcfd5db, width: 1, alpha: 0.7 });
+        break;
+
+      case 'building':
+        shape
+          .rect(0, 0, width, height)
+          .fill({ color: 0xd8c8a9, alpha: 1 })
+          .stroke({ color: 0x8f7754, width: 2, alpha: 0.85 });
+        break;
+
+      case 'entrance':
+        shape
+          .poly([
+            width / 2, 0,
+            width, height * 0.55,
+            width, height,
+            0, height,
+            0, height * 0.55,
+          ])
+          .fill({ color: 0x86b7ef, alpha: 0.95 });
+        break;
+
+      case 'garden':
+        shape
+          .ellipse(width / 2, height / 2, width / 2, height / 2)
+          .fill({ color: 0x78a84c, alpha: 0.7 })
+          .stroke({ color: 0x4c7d34, width: 1.5, alpha: 0.8 });
+        break;
+
+      case 'bench':
+      case 'seating':
+        shape
+          .rect(width * 0.15, height * 0.32, width * 0.7, Math.max(3, height * 0.13))
+          .fill({ color: 0x98684f, alpha: 1 });
+        shape
+          .rect(width * 0.2, height * 0.62, width * 0.08, height * 0.25)
+          .fill({ color: 0x6a4c3c, alpha: 1 });
+        shape
+          .rect(width * 0.72, height * 0.62, width * 0.08, height * 0.25)
+          .fill({ color: 0x6a4c3c, alpha: 1 });
+        break;
+
+      case 'toilet':
+        shape
+          .roundRect(0, 0, width, height, Math.min(8, Math.min(width, height) * 0.15))
+          .fill({ color: 0xeef4f8, alpha: 1 })
+          .stroke({ color: 0x4e6778, width: 1.5, alpha: 0.9 });
+        break;
+
+      case 'garbage-bin':
+        shape
+          .roundRect(width * 0.2, height * 0.2, width * 0.6, height * 0.62, Math.min(5, width * 0.1))
+          .fill({ color: 0x4f6770, alpha: 1 });
+        shape
+          .rect(width * 0.14, height * 0.12, width * 0.72, Math.max(2, height * 0.08))
+          .fill({ color: 0x34434a, alpha: 1 });
+        break;
+
+      case 'information':
+        shape
+          .circle(width / 2, height / 2, Math.min(width, height) * 0.38)
+          .fill({ color: 0x3f8fee, alpha: 1 });
+        break;
+
+      default:
+        shape
+          .rect(0, 0, width, height)
+          .fill({ color: 0x87909a, alpha: 0.72 });
+        break;
+    }
   }
 
   /** Shows the space's name centered on it, hidden when the box is too small to read. */
