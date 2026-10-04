@@ -1272,9 +1272,9 @@ export class SpaceRenderer {
       // active when they're set — reapply now the real (differently
       // sized) texture has replaced the 1x1 placeholder, or the sprite
       // renders at the wrong size.
-      const current = this.spaceData.get(entry.node.label as string);
-      const w = current?.geometry.width ?? sprite.width;
-      const h = current?.geometry.height ?? sprite.height;
+      const current = this.spaceData.get(space.id);
+      const w = current?.geometry.width ?? space.geometry.width;
+      const h = current?.geometry.height ?? space.geometry.height;
       sprite.width = w;
       sprite.height = h;
       sprite.position.set(w / 2, h / 2);
