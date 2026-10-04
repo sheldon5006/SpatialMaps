@@ -133,10 +133,13 @@ export interface SpaceRendererEvents extends Record<string, unknown> {
  * so the rect is drawn by a Graphics but never parents anything itself —
  * the plain Container is what attachments hang off of.
  */
+type ResizeCorner = 'nw' | 'ne' | 'se' | 'sw';
+
 interface SpaceNode {
   node: Container;
   shape: Graphics;
   handle: Graphics;
+  resizeHandles: Record<ResizeCorner, Graphics>;
   label: Text;
   /** Liquid-glass overlay drawn over a space when an active filter recedes it. */
   glass: Graphics;
@@ -188,6 +191,10 @@ export class SpaceRenderer {
   private rotatingId: string | null = null;
   private rotateCenterX = 0;
   private rotateCenterY = 0;
+
+  private resizingId: string | null = null;
+  private resizingCorner: ResizeCorner | null = null;
+  private resizeStartGeometry: Space['geometry'] | null = null;
 
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
@@ -539,6 +546,9 @@ export class SpaceRenderer {
     this.stage.off('pointerupoutside', this.onDragEnd);
 
     this.cancelDrag();
+    this.resizingId = null;
+    this.resizingCorner = null;
+    this.resizeStartGeometry = null;
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
@@ -603,7 +613,31 @@ export class SpaceRenderer {
     handle.on('pointerdown', (event) => this.onHandlePointerDown(space.id, event));
     node.addChild(handle);
 
-    const entry: SpaceNode = { node, shape, handle, label, glass, checkBadge };
+    const resizeHandles = {} as Record<ResizeCorner, Graphics>;
+    const corners: ResizeCorner[] = ['nw', 'ne', 'se', 'sw'];
+    for (const corner of corners) {
+      const resizeHandle = new Graphics();
+      resizeHandle.eventMode = 'none';
+      resizeHandle.zIndex = 40;
+      resizeHandle.hitArea = new Circle(0, 0, 9);
+      resizeHandle.visible = false;
+      resizeHandle.cursor = this.resizeCursor(corner);
+      resizeHandle.on('pointerdown', (event) =>
+        this.onResizeHandlePointerDown(space.id, corner, event),
+      );
+      resizeHandles[corner] = resizeHandle;
+      node.addChild(resizeHandle);
+    }
+
+    const entry: SpaceNode = {
+      node,
+      shape,
+      handle,
+      resizeHandles,
+      label,
+      glass,
+      checkBadge,
+    };
 
     node.eventMode = 'static';
     node.label = space.id;
@@ -624,7 +658,50 @@ export class SpaceRenderer {
     return entry;
   }
 
-  private readonly onSpacePointerDown = (id: string, event: FederatedPointerEvent): void => {
+  private resizeCursor(corner: ResizeCorner): string {
+    return corner === 'nw' || corner === 'se' ? 'nwse-resize' : 'nesw-resize';
+  }
+
+  private drawResizeHandles(
+    handles: Record<ResizeCorner, Graphics>,
+    geometry: Space['geometry'],
+  ): void {
+    const corners: Record<ResizeCorner, { x: number; y: number }> = {
+      nw: { x: 0, y: 0 },
+      ne: { x: geometry.width, y: 0 },
+      se: { x: geometry.width, y: geometry.height },
+      sw: { x: 0, y: geometry.height },
+    };
+
+    for (const [corner, handle] of Object.entries(handles) as [
+      ResizeCorner,
+      Graphics,
+    ][]) {
+      const { x, y } = corners[corner];
+      handle.position.set(x, y);
+      handle.clear().roundRect(-5, -5, 10, 10, 2).fill({ color: 0xffffff, alpha: 0.96 });
+      handle.stroke({ color: 0x3a7afe, width: 1.25, alpha: 0.95 });
+    }
+  }
+
+  private readonly onResizeHandlePointerDown = (
+    id: string,
+    corner: ResizeCorner,
+    event: FederatedPointerEvent,
+  ): void => {
+    if (this.mode !== 'edit') return;
+
+    const space = this.spaceData.get(id);
+    if (!space) return;
+
+    event.stopPropagation();
+
+    this.resizingId = id;
+    this.resizingCorner = corner;
+    this.resizeStartGeometry = { ...space.geometry };
+  };
+
+    private readonly onSpacePointerDown = (id: string, event: FederatedPointerEvent): void => {
     if (this.mode !== 'edit') return;
 
     const space = this.spaceData.get(id);
@@ -655,6 +732,11 @@ export class SpaceRenderer {
   };
 
   private readonly onDragMove = (event: FederatedPointerEvent): void => {
+    if (this.resizingId && this.resizingCorner && this.resizeStartGeometry) {
+      this.resizeFromPointer(event, this.resizingId, this.resizingCorner, this.resizeStartGeometry);
+      return;
+    }
+
     if (this.draggingId) {
       const zoom = this.getCamera().zoom;
       const dx = (event.global.x - this.dragStartPointerX) / zoom;
@@ -681,7 +763,81 @@ export class SpaceRenderer {
     }
   };
 
+  private resizeFromPointer(
+    event: FederatedPointerEvent,
+    id: string,
+    corner: ResizeCorner,
+    start: Space['geometry'],
+  ): void {
+    const cam = this.getCamera();
+    const pointerWorldX = (event.global.x - cam.x) / cam.zoom;
+    const pointerWorldY = (event.global.y - cam.y) / cam.zoom;
+
+    const startCenterX = start.x + start.width / 2;
+    const startCenterY = start.y + start.height / 2;
+    const angle = ((start.rotation ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // Convert the pointer into the start geometry's local coordinate system.
+    const worldDx = pointerWorldX - startCenterX;
+    const worldDy = pointerWorldY - startCenterY;
+    const localX = worldDx * cos + worldDy * sin;
+    const localY = -worldDx * sin + worldDy * cos;
+
+    const sx = corner === 'ne' || corner === 'se' ? 1 : -1;
+    const sy = corner === 'se' || corner === 'sw' ? 1 : -1;
+
+    const anchorX = -sx * start.width / 2;
+    const anchorY = -sy * start.height / 2;
+    const minSize = 4;
+
+    const targetX = sx > 0
+      ? Math.max(anchorX + minSize, localX)
+      : Math.min(anchorX - minSize, localX);
+    const targetY = sy > 0
+      ? Math.max(anchorY + minSize, localY)
+      : Math.min(anchorY - minSize, localY);
+
+    let newWidth = Math.abs(targetX - anchorX);
+    let newHeight = Math.abs(targetY - anchorY);
+
+    // A circle remains a true circle while still allowing free corner sizing.
+    if (start.type === 'circle') {
+      const diameter = Math.max(newWidth, newHeight);
+      newWidth = diameter;
+      newHeight = diameter;
+    }
+
+    const newCenterLocalX = (targetX + anchorX) / 2;
+    const newCenterLocalY = (targetY + anchorY) / 2;
+
+    const newCenterWorldX =
+      startCenterX + newCenterLocalX * cos - newCenterLocalY * sin;
+    const newCenterWorldY =
+      startCenterY + newCenterLocalX * sin + newCenterLocalY * cos;
+
+    this.updateSpace(id, {
+      geometry: {
+        x: newCenterWorldX - newWidth / 2,
+        y: newCenterWorldY - newHeight / 2,
+        width: newWidth,
+        height: newHeight,
+      },
+    });
+  }
+
   private readonly onDragEnd = (): void => {
+    if (this.resizingId) {
+      const id = this.resizingId;
+      this.resizingId = null;
+      this.resizingCorner = null;
+      this.resizeStartGeometry = null;
+      const space = this.spaceData.get(id);
+      if (space) this.events.emit('spacetransform', { id, geometry: space.geometry });
+      return;
+    }
+
     if (this.draggingId) {
       const id = this.draggingId;
       this.draggingId = null;
@@ -701,6 +857,9 @@ export class SpaceRenderer {
   private cancelDrag(): void {
     this.draggingId = null;
     this.rotatingId = null;
+    this.resizingId = null;
+    this.resizingCorner = null;
+    this.resizeStartGeometry = null;
   }
 
   /** Positions/rotates a node from its geometry. */
@@ -801,10 +960,17 @@ export class SpaceRenderer {
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
     this.drawHandle(entry.handle, geometry);
-    const showHandle = this.mode === 'edit' && this.selectedIds.has(space.id);
-    entry.handle.visible = showHandle;
-    entry.handle.eventMode = showHandle ? 'static' : 'none';
-    entry.node.addChild(entry.handle); // keep the handle above the label/image
+    const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
+    entry.handle.visible = showEditorHandles;
+    entry.handle.eventMode = showEditorHandles ? 'static' : 'none';
+    entry.node.addChild(entry.handle); // keep the rotation handle above the label/image
+
+    this.drawResizeHandles(entry.resizeHandles, geometry);
+    for (const resizeHandle of Object.values(entry.resizeHandles)) {
+      resizeHandle.visible = showEditorHandles;
+      resizeHandle.eventMode = showEditorHandles ? 'static' : 'none';
+      entry.node.addChild(resizeHandle);
+    }
   }
 
   /** Draws simple vector symbols for infrastructure and prop elements. */
