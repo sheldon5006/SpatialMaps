@@ -259,7 +259,7 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
                 <button
                   type="button"
                   class="search-result"
-                  [class.selected]="selectedIds().includes(space.id)"
+                  [class.selected]="searchHighlightedId() === space.id || selectedIds().includes(space.id)"
                   (click)="openSearchResult(space.id)"
                   role="listitem"
                 >
@@ -1648,6 +1648,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
   protected readonly searchQuery = signal('');
+  protected readonly searchHighlightedId = signal<string | null>(null);
 
   protected readonly searchableBooths = computed(() =>
     this.searchableSpaces().filter((space) => space.type === 'booth'),
@@ -2048,6 +2049,8 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
   protected clearSearch(): void {
     this.searchQuery.set('');
+    this.searchHighlightedId.set(null);
+    this.engine.setSearchHighlight(null);
   }
 
   protected setSearchEnabled(enabled: boolean): void {
@@ -2074,6 +2077,9 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
+    this.searchHighlightedId.set(id);
+    this.engine.setSearchHighlight(id);
+
     // Keep the target booth in the visible map area rather than centering it
     // underneath the persistent search panel.
     this.engine.camera.fitBounds([id], {
