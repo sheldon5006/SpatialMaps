@@ -11,16 +11,22 @@ export interface SpatialMapGridSettings {
   size: number;
 }
 
+export interface SpatialMapSearchSettings {
+  enabled: boolean;
+}
+
 export interface SpatialMapSettings {
   theme: MapTheme;
   zoom: SpatialMapZoomSettings;
   grid: SpatialMapGridSettings;
+  search: SpatialMapSearchSettings;
 }
 
 export type SpatialMapSettingsPatch = {
   theme?: MapTheme;
   zoom?: Partial<SpatialMapZoomSettings>;
   grid?: Partial<SpatialMapGridSettings>;
+  search?: Partial<SpatialMapSearchSettings>;
 };
 
 export const DEFAULT_SPATIAL_MAP_SETTINGS: SpatialMapSettings = {
@@ -33,6 +39,9 @@ export const DEFAULT_SPATIAL_MAP_SETTINGS: SpatialMapSettings = {
   grid: {
     enabled: true,
     size: 50,
+  },
+  search: {
+    enabled: true,
   },
 };
 
