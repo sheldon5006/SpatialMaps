@@ -1105,8 +1105,8 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
   protected readonly propColorPalette = PROP_COLOR_PALETTE;
   protected readonly gridSizes = [25, 50, 100] as const;
-  protected viewMinZoom = 0.65;
-  protected viewBaseZoom = 1;
+  protected viewMinZoom = 0.45;
+  protected viewBaseZoom = 0.75;
   protected viewMaxZoom = 2.8;
   protected gridSize = 50;
   protected form: SpaceFormState = defaultFormState();
@@ -1128,6 +1128,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       this.engine.setGridEnabled(this.gridEnabled());
       this.engine.setGridSize(this.gridSize);
       this.engine.loadSpaces(TEST_SPACES);
+      // Start from a complete map view instead of the engine's 60px/60px
+      // world offset. Fit is allowed to go below the interactive readable
+      // minimum so the whole venue remains visible.
+      this.engine.camera.fitBounds(undefined, { duration: 0 });
 
       // Hover/select/mode/transform are discrete, low-frequency events
       // (unlike pan/zoom), so re-entering the Angular zone here is right.
