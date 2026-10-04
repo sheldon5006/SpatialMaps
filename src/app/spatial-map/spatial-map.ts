@@ -2217,13 +2217,15 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     if (matches.length === 1 || this.isSearchCluster(matches)) {
       const nearest = this.nearestSearchMatch(matches);
       this.engine.camera.flyTo(nearest.id, {
-        padding: MAP_VIEW_PADDING,
+        // Keep the result clear of the fixed search panel.
+        padding: SEARCH_PANEL_PADDING,
         maxZoom: 1.8,
         duration: 450,
       });
     } else {
       this.engine.camera.fitBounds(ids, {
-        padding: MAP_VIEW_PADDING,
+        // Multi-match fitting must reserve the search panel as well.
+        padding: SEARCH_PANEL_PADDING,
         maxZoom: 1.15,
         duration: 450,
       });
@@ -2323,7 +2325,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
       if (query && matches.length > 1 && !this.isSearchCluster(matches)) {
         this.engine.camera.fitBounds(ids, {
-          padding: MAP_VIEW_PADDING,
+          padding: SEARCH_PANEL_PADDING,
           maxZoom: 1.15,
           duration: 450,
         });
@@ -2331,7 +2333,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
         const target = query ? this.nearestSearchMatch(matches) : this.engine.getSpace(id);
         if (target) {
           this.engine.camera.flyTo(target.id, {
-            padding: MAP_VIEW_PADDING,
+            padding: SEARCH_PANEL_PADDING,
             maxZoom: 1.8,
             duration: 450,
           });
