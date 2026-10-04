@@ -45,44 +45,6 @@ const ELEMENT_TYPE_OPTIONS: Array<{ value: SpaceElementType; label: string }> = 
   { value: 'prop', label: 'Prop' },
 ];
 
-const PROP_OPTIONS: Array<{ value: SpacePropKind; label: string }> = [
-  { value: 'road', label: 'Road' },
-  { value: 'path', label: 'Path' },
-  { value: 'building', label: 'Building' },
-  { value: 'parking', label: 'Parking' },
-  { value: 'entrance', label: 'Entrance' },
-  { value: 'garden', label: 'Garden' },
-  { value: 'tree', label: 'Tree' },
-  { value: 'bench', label: 'Bench' },
-  { value: 'seating', label: 'Seating' },
-  { value: 'toilet', label: 'Toilet' },
-  { value: 'garbage-bin', label: 'Garbage bin' },
-  { value: 'information', label: 'Information' },
-];
-
-const PROP_COLOR_PALETTE = [
-  { value: '#64748b', label: 'Slate' },
-  { value: '#ef4444', label: 'Red' },
-  { value: '#f97316', label: 'Orange' },
-  { value: '#eab308', label: 'Yellow' },
-  { value: '#22c55e', label: 'Green' },
-  { value: '#14b8a6', label: 'Teal' },
-  { value: '#06b6d4', label: 'Cyan' },
-  { value: '#3b82f6', label: 'Blue' },
-  { value: '#8b5cf6', label: 'Purple' },
-  { value: '#ec4899', label: 'Pink' },
-  { value: '#a16207', label: 'Earth' },
-  { value: '#f5f5f4', label: 'Light' },
-];
-
-function defaultShapeForElement(type: SpaceElementType): SpaceGeometry['type'] {
-  return type === 'prop' ? 'circle' : 'rectangle';
-}
-
-function defaultPropKindForElement(type: SpaceElementType): SpacePropKind | null {
-  return type === 'prop' ? 'tree' : null;
-}
-
 /** Human-readable label + swatch color per status, for the legend and
  *  tooltip — kept here rather than invented per-use so they stay in sync. */
 const STATUS_META: Record<SpaceStatus, { label: string; color: string }> = {
@@ -120,12 +82,12 @@ interface SpaceFormState {
   name: string;
   status: SpaceStatus;
   elementType: SpaceElementType;
-  propKind: SpacePropKind | null;
   shape: SpaceGeometry['type'];
   width: number;
   height: number;
   imageDataUrl: string | null;
   propColor: string;
+  propRepresentation: 'shape' | 'image';
 }
 
 function defaultFormState(): SpaceFormState {
@@ -133,12 +95,12 @@ function defaultFormState(): SpaceFormState {
     name: '',
     status: 'available',
     elementType: 'booth',
-    propKind: null,
     shape: 'rectangle',
     width: 80,
     height: 60,
     imageDataUrl: null,
     propColor: '#64748b',
+    propRepresentation: 'shape',
   };
 }
 
@@ -220,12 +182,14 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <button class="icon-btn" (click)="closeForm()">Close</button>
         </div>
 
-        @if (form.elementType === 'booth') {
-          <label class="field">
-            <span>Name</span>
-            <input type="text" [(ngModel)]="form.name" placeholder="e.g. Booth A101" />
-          </label>
-        }
+        <label class="field">
+          <span>Name</span>
+          <input
+            type="text"
+            [(ngModel)]="form.name"
+            [placeholder]="form.elementType === 'booth' ? 'e.g. Booth A101' : 'e.g. Tree / Main Entrance'"
+          />
+        </label>
 
         @if (mode() === 'edit') {
           <label class="field">
@@ -245,63 +209,84 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
             </div>
           </label>
 
-          @if (form.elementType !== 'booth') {
-            <label class="field">
-              <span>Prop type</span>
-              <select [(ngModel)]="form.propKind" (ngModelChange)="onPropKindChange($event)">
-                @for (option of currentPropOptions(); track option.value) {
-                  <option [ngValue]="option.value">{{ option.label }}</option>
-                }
-              </select>
-            </label>
-          }
-
           @if (form.elementType === 'prop') {
             <label class="field">
-              <span>Prop color</span>
-              <div class="prop-color-palette" role="group" aria-label="Prop color">
-                @for (color of propColorPalette; track color.value) {
+              <span>Representation</span>
+              <div class="mode-switch">
+                <button
+                  type="button"
+                  [class.active]="form.propRepresentation === 'shape'"
+                  [attr.aria-pressed]="form.propRepresentation === 'shape'"
+                  (click)="setPropRepresentation('shape')"
+                >Shape</button>
+                <button
+                  type="button"
+                  [class.active]="form.propRepresentation === 'image'"
+                  [attr.aria-pressed]="form.propRepresentation === 'image'"
+                  (click)="setPropRepresentation('image')"
+                >Image</button>
+              </div>
+            </label>
+
+            @if (form.propRepresentation === 'shape') {
+              <label class="field">
+                <span>Shape</span>
+                <div class="shape-picker" role="group" aria-label="Vector shape">
+                  @for (shape of vectorShapeOptions; track shape.value) {
+                    <button
+                      type="button"
+                      class="shape-option"
+                      [class.active]="form.shape === shape.value"
+                      [attr.aria-pressed]="form.shape === shape.value"
+                      (click)="setShape(shape.value)"
+                    >
+                      <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                      <span>{{ shape.label }}</span>
+                    </button>
+                  }
+                </div>
+              </label>
+
+              <label class="field">
+                <span>Prop color</span>
+                <div class="prop-color-palette" role="group" aria-label="Prop color">
+                  @for (color of propColorPalette; track color.value) {
+                    <button
+                      type="button"
+                      class="prop-color-swatch"
+                      [class.active]="form.propColor === color.value"
+                      [style.background]="color.value"
+                      [attr.aria-label]="color.label"
+                      [attr.aria-pressed]="form.propColor === color.value"
+                      (click)="setPropColor(color.value)"
+                    ></button>
+                  }
+                  <label class="custom-color">
+                    <span>Custom</span>
+                    <input type="color" [(ngModel)]="form.propColor" aria-label="Custom prop color" />
+                  </label>
+                </div>
+              </label>
+            }
+          } @else {
+            <label class="field">
+              <span>Vector shape</span>
+              <div class="shape-picker" role="group" aria-label="Vector shape">
+                @for (shape of vectorShapeOptions; track shape.value) {
                   <button
                     type="button"
-                    class="prop-color-swatch"
-                    [class.active]="form.propColor === color.value"
-                    [style.background]="color.value"
-                    [attr.aria-label]="color.label"
-                    [attr.aria-pressed]="form.propColor === color.value"
-                    (click)="setPropColor(color.value)"
-                  ></button>
+                    class="shape-option"
+                    [class.active]="form.shape === shape.value"
+                    [attr.aria-pressed]="form.shape === shape.value"
+                    (click)="setShape(shape.value)"
+                  >
+                    <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                    <span>{{ shape.label }}</span>
+                  </button>
                 }
-                <label class="custom-color">
-                  <span>Custom</span>
-                  <input
-                    type="color"
-                    [(ngModel)]="form.propColor"
-                    aria-label="Custom prop color"
-                  />
-                </label>
               </div>
             </label>
           }
-
-          <label class="field">
-            <span>Vector shape</span>
-            <div class="shape-picker" role="group" aria-label="Vector shape">
-              @for (shape of vectorShapeOptions; track shape.value) {
-                <button
-                  type="button"
-                  class="shape-option"
-                  [class.active]="form.shape === shape.value"
-                  [attr.aria-pressed]="form.shape === shape.value"
-                  (click)="setShape(shape.value)"
-                >
-                  <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
-                  <span>{{ shape.label }}</span>
-                </button>
-              }
-            </div>
-          </label>
-        }
-
         <label class="field">
           <span>Status</span>
           <select [(ngModel)]="form.status">
@@ -1006,9 +991,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
-      elementType: space.type === 'prop' || space.type === 'infrastructure' ? 'prop' : 'booth',
-      propKind: space.properties.propKind ?? null,
+      elementType: space.type === 'prop' ? 'prop' : 'booth',
       propColor: space.properties.propColor ?? '#64748b',
+      propRepresentation: space.properties.imageUrl ? 'image' : 'shape',
       shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
@@ -1039,27 +1024,18 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setElementType(elementType: SpaceElementType): void {
     this.form.elementType = elementType;
-    this.form.propKind = defaultPropKindForElement(elementType);
-    this.form.shape = defaultShapeForElement(elementType);
-
-    if (elementType === 'prop') {
-      this.form.name = '';
-      if (!this.form.propColor) this.form.propColor = '#64748b';
-    }
-
-    if (this.form.shape === 'circle') {
-      const diameter = Math.max(4, Number(this.form.width) || 80);
-      this.form.width = diameter;
-      this.form.height = diameter;
+    if (elementType === 'booth') {
+      this.form.propRepresentation = 'shape';
     }
   }
 
-  protected currentPropOptions(): Array<{ value: SpacePropKind; label: string }> {
-    return this.propOptions;
-  }
-
-  protected onPropKindChange(kind: SpacePropKind | null): void {
-    this.form.propKind = kind;
+  protected setPropRepresentation(representation: 'shape' | 'image'): void {
+    this.form.propRepresentation = representation;
+    if (representation === 'image') {
+      this.form.shape = 'rectangle';
+    } else {
+      this.form.imageDataUrl = null;
+    }
   }
 
   protected setPropColor(color: string): void {
@@ -1068,16 +1044,15 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setShape(shape: SpaceGeometry['type']): void {
     this.form.shape = shape;
-
+    if (this.form.elementType === 'prop') {
+      this.form.propRepresentation = 'shape';
+    }
     if (shape === 'circle') {
-      // Circle uses width as its diameter, so keep both dimensions equal.
       const diameter = Math.max(4, Number(this.form.width) || 80);
       this.form.width = diameter;
       this.form.height = diameter;
     }
-
     if (shape === 'line') {
-      // Path is represented as a thin rotated vector segment.
       this.form.height = Math.max(3, Math.min(8, Number(this.form.height) || 6));
     }
   }
@@ -1085,6 +1060,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected onImageSelected(event: Event): void {
     const file = (event.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    if (this.form.elementType === 'prop') {
+      this.form.propRepresentation = 'image';
+      this.form.shape = 'rectangle';
+    }
     const reader = new FileReader();
     reader.onload = () => this.zone.run(() => (this.form.imageDataUrl = reader.result as string));
     reader.readAsDataURL(file);
@@ -1092,6 +1071,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected removeImage(): void {
     this.form.imageDataUrl = null;
+    if (this.form.elementType === 'prop') this.form.propRepresentation = 'shape';
   }
 
   /** Places a new space just to the right of the current content's bounding
@@ -1108,7 +1088,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, elementType, propKind, propColor, shape, width, height, imageDataUrl } = this.form;
+    const { name, status, elementType, propColor, propRepresentation, shape, width, height, imageDataUrl } = this.form;
     const w = Math.max(4, Number(width) || 80);
     const h = shape === 'circle' ? w : Math.max(4, Number(height) || 60);
     const savedType: SpaceElementType = elementType;
@@ -1121,11 +1101,11 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
         type: savedType,
         geometry: { type: shape, ...position, width: w, height: h },
         properties: {
-          name: savedType === 'booth' ? (name || id) : undefined,
+          name: name || id,
           status,
-          propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
-          propColor: savedType === 'booth' ? undefined : propColor,
-          imageUrl: savedType === 'booth' && shape === 'rectangle'
+          propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
+          imageUrl: (savedType === 'booth' && shape === 'rectangle') ||
+            (savedType === 'prop' && propRepresentation === 'image')
             ? (imageDataUrl ?? undefined)
             : undefined,
         },
@@ -1144,9 +1124,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       properties: {
         name: savedType === 'booth' ? (name || id) : undefined,
         status,
-        propKind: savedType === 'booth' ? undefined : (propKind ?? undefined),
-        propColor: savedType === 'booth' ? undefined : propColor,
-        imageUrl: savedType === 'booth' && shape === 'rectangle'
+        propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
+        imageUrl: (savedType === 'booth' && shape === 'rectangle') ||
+          (savedType === 'prop' && propRepresentation === 'image')
           ? (imageDataUrl ?? undefined)
           : undefined,
       },
