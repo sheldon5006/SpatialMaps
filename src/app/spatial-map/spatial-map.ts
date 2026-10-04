@@ -235,7 +235,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
               <div class="settings-section">
                 <span class="settings-label">Edit grid</span>
                 <label class="toggle-option">
-                  <input type="checkbox" [(ngModel)]="gridEnabled" (ngModelChange)="toggleGrid()" />
+                  <input type="checkbox" [(ngModel)]="gridEnabled" (ngModelChange)="setGridEnabled($event)" />
                   <span>Show layout grid</span>
                 </label>
                 <div class="grid-size-row">
@@ -1204,7 +1204,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected toggleGrid(): void {
-    const enabled = !this.gridEnabled();
+    this.setGridEnabled(!this.gridEnabled());
+  }
+
+  protected setGridEnabled(enabled: boolean): void {
     this.gridEnabled.set(enabled);
     this.engine.setGridEnabled(enabled);
   }
