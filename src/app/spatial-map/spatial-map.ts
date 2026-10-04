@@ -847,30 +847,28 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
         left: 0;
       }
 
-      .spatial-map-root.search-open .map-pane {
-        left: 308px;
-      }
-
       .search-panel {
         position: absolute;
-        top: 0;
-        left: 0;
-        bottom: auto;
+        top: 16px;
+        left: 16px;
         z-index: 16;
-        width: 308px;
-        max-height: calc(100% - 16px);
+        width: 360px;
+        height: auto;
+        max-height: calc(100% - 32px);
         display: flex;
         flex-direction: column;
-        background: rgba(18, 20, 26, 0.96);
-        border-right: 1px solid rgba(255, 255, 255, 0.10);
-        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 0 0 10px 0;
-        box-shadow: 14px 0 35px rgba(0, 0, 0, 0.16);
+        background: rgba(18, 20, 26, 0.94);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        border-radius: 14px;
+        box-shadow:
+          0 18px 45px rgba(0, 0, 0, 0.24),
+          0 2px 8px rgba(0, 0, 0, 0.14);
         overflow: hidden;
       }
 
       .search-panel.collapsed {
-        bottom: auto;
         height: auto;
         max-height: none;
       }
@@ -995,8 +993,8 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
       }
 
       .search-adjacent-hover {
-        top: 12px;
-        left: 320px;
+        top: 16px;
+        left: 392px;
         z-index: 17;
       }
 
@@ -1012,11 +1010,20 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
       }
 
       .search-results {
-        flex: 0 1 auto;
+        flex: 0 0 auto;
         min-height: 0;
-        max-height: 42vh;
+        max-height: min(42vh, 420px);
         overflow-y: auto;
-        padding: 0 8px 14px;
+        padding: 0 8px 12px;
+      }
+
+      .search-results::-webkit-scrollbar {
+        width: 6px;
+      }
+
+      .search-results::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.18);
+        border-radius: 999px;
       }
 
       .search-result {
@@ -2308,47 +2315,30 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   }
 
   protected openSearchResult(id: string): void {
-    const query = this.searchQuery().trim();
-    const matches = query
-      ? this.searchMatches()
-      : (() => {
-          const space = this.engine.getSpace(id);
-          return space ? [space] : [];
-        })();
+    const target = this.engine.getSpace(id);
+    if (!target) return;
 
-    if (matches.length > 0) {
-      const ids = matches.map((space) => space.id);
-      this.engine.setSearchHighlights(ids);
-      this.searchHighlightedId.set(id);
+    // Clicking a result means "take me to this booth" and "select this booth".
+    // Search matches remain visible, but the clicked row becomes the actual
+    // business selection when the selection rule permits it.
+    this.engine.selectSpace(id, true);
 
-      if (query && matches.length > 1 && !this.isSearchCluster(matches)) {
-        this.engine.camera.fitBounds(ids, {
-          padding: SEARCH_PANEL_PADDING,
-          maxZoom: 1.15,
-          duration: 450,
-        });
-      } else {
-        const target = query ? this.nearestSearchMatch(matches) : this.engine.getSpace(id);
-        if (target) {
-          this.engine.camera.flyTo(target.id, {
-            padding: SEARCH_PANEL_PADDING,
-            maxZoom: 1.8,
-            duration: 450,
-          });
-        }
-      }
+    this.engine.camera.flyTo(id, {
+      padding: MAP_VIEW_PADDING,
+      maxZoom: 1.8,
+      duration: 450,
+    });
 
-      if (this.focusEnabled && this.focusDurationMs > 0) {
-        this.engine.focusSpaces(ids, {
-          durationMs: this.focusDurationMs,
-          color: '#111827',
-        });
-      }
+    if (this.focusEnabled && this.focusDurationMs > 0) {
+      this.engine.focusSpaces([id], {
+        durationMs: this.focusDurationMs,
+        color: '#111827',
+      });
     }
 
+    this.searchHighlightedId.set(id);
     this.searchResultClick.emit(id);
   }
-
   /** Programmatic search helper for surrounding Angular code. */
   searchSpaces(query: string): Space[] {
     const terms = query.trim().toLowerCase().split(/\\s+/).filter(Boolean);
