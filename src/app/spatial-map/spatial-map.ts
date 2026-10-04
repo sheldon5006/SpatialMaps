@@ -1614,14 +1614,6 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.engine.removeSpace(id);
   }
 
-  bringToFront(id: string): void {
-    this.engine.bringToFront(id);
-  }
-
-  sendToBack(id: string): void {
-    this.engine.sendToBack(id);
-  }
-
   fitToMap(options?: Parameters<SpatialMapEngine['camera']['fitBounds']>[1]): void {
     this.engine.camera.fitBounds(undefined, options);
   }
@@ -1998,12 +1990,12 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
   protected bringToFront(): void {
     const id = this.editingId();
-    if (id) this.engine.bringToFront(id);
+    if (id) this.bringToFront(id);
   }
 
   protected sendToBack(): void {
     const id = this.editingId();
-    if (id) this.engine.sendToBack(id);
+    if (id) this.sendToBack(id);
   }
 
   // ---- Dev tools: camera ----
