@@ -1214,11 +1214,11 @@ export class SpaceRenderer {
     entry.label.style.fontSize = targetScreenFont / zoom;
     const textColor = this.parsePropColor(
       space.properties.displayTextColor,
-      showTextboxText ? '#243039' : LABEL_COLOR,
+      showTextboxText ? 0x243039 : LABEL_COLOR,
     );
     const outlineColor = this.parsePropColor(
       space.properties.displayTextOutlineColor,
-      showTextboxText ? '#ffffff' : LABEL_OUTLINE_COLOR,
+      showTextboxText ? 0xffffff : LABEL_OUTLINE_COLOR,
     );
     const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
       ? 0
