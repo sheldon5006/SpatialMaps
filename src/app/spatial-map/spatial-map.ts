@@ -211,7 +211,73 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
       </div>
 
       <div class="canvas-area">
-        <div #host class="spatial-map-host"></div>
+        @if (mode() === 'view') {
+          <aside class="search-panel" aria-label="Search spaces">
+            <div class="search-panel-header">
+              <div>
+                <strong>Find a booth</strong>
+                <span>{{ searchableBooths().length }} booths</span>
+              </div>
+              @if (searchQuery()) {
+                <button
+                  type="button"
+                  class="search-clear-btn"
+                  (click)="clearSearch()"
+                  aria-label="Clear search"
+                >×</button>
+              }
+            </div>
+
+            <label class="search-box">
+              <span aria-hidden="true">⌕</span>
+              <input
+                type="search"
+                [ngModel]="searchQuery()"
+                (ngModelChange)="searchQuery.set($event)"
+                placeholder="Search booth name or ID..."
+                autocomplete="off"
+              />
+            </label>
+
+            @if (searchQuery()) {
+              <div class="search-summary">
+                {{ searchResults().length }} matching {{ searchResults().length === 1 ? 'booth' : 'booths' }}
+              </div>
+            } @else {
+              <div class="search-summary">Browse all bookable spaces</div>
+            }
+
+            <div class="search-results" role="list">
+              @for (space of searchResults(); track space.id) {
+                <button
+                  type="button"
+                  class="search-result"
+                  [class.selected]="selectedIds().includes(space.id)"
+                  (click)="openSearchResult(space.id)"
+                  role="listitem"
+                >
+                  <span class="search-result-id">{{ searchDisplayName(space) }}</span>
+                  <span class="search-result-name">{{ searchLongName(space) }}</span>
+                  <span
+                    class="search-result-status"
+                    [style.background]="statusColor(space.properties.status)"
+                  >
+                    {{ statusLabel(space.properties.status) }}
+                  </span>
+                </button>
+              } @empty {
+                <div class="search-empty">
+                  <strong>No booths found</strong>
+                  <span>Try a booth ID, name or status.</span>
+                </div>
+              }
+            </div>
+          </aside>
+        }
+
+        <div class="map-pane">
+          <div #host class="spatial-map-host"></div>
+        </div>
 
         @if (settingsOpen()) {
           <div class="settings-panel">
@@ -714,6 +780,178 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         background: rgba(255, 255, 255, 0.1);
         color: #c3c7d1;
         text-transform: capitalize;
+      }
+
+      /* ---- Search panel ------------------------------------------------ */
+
+      .map-pane {
+        position: absolute;
+        inset: 0;
+      }
+
+      .search-panel {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 16;
+        width: 308px;
+        display: flex;
+        flex-direction: column;
+        background: rgba(18, 20, 26, 0.96);
+        border-right: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: 14px 0 35px rgba(0, 0, 0, 0.16);
+      }
+
+      .search-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 16px 12px;
+        color: #e8eaf0;
+      }
+
+      .search-panel-header > div {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+
+      .search-panel-header strong {
+        font-size: 15px;
+        letter-spacing: -0.01em;
+      }
+
+      .search-panel-header span {
+        color: #7f8794;
+        font-size: 11px;
+      }
+
+      .search-clear-btn {
+        width: 28px;
+        height: 28px;
+        border: none;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.06);
+        color: #aab1bd;
+        font-size: 18px;
+      }
+
+      .search-box {
+        margin: 0 14px 10px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 11px;
+        border-radius: 9px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.055);
+        color: #8f97a3;
+      }
+
+      .search-box:focus-within {
+        border-color: #3a7afe;
+        box-shadow: 0 0 0 2px rgba(58, 122, 254, 0.14);
+      }
+
+      .search-box span {
+        font-size: 18px;
+        line-height: 1;
+      }
+
+      .search-box input {
+        min-width: 0;
+        width: 100%;
+        border: none;
+        outline: none;
+        background: transparent;
+        color: #edf0f4;
+        font: inherit;
+      }
+
+      .search-box input::placeholder {
+        color: #6f7783;
+      }
+
+      .search-summary {
+        padding: 0 16px 10px;
+        color: #707987;
+        font-size: 11px;
+      }
+
+      .search-results {
+        min-height: 0;
+        overflow-y: auto;
+        padding: 0 8px 14px;
+      }
+
+      .search-result {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 58px 1fr auto;
+        gap: 7px 10px;
+        align-items: center;
+        padding: 10px 9px;
+        margin-bottom: 4px;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: transparent;
+        color: #dfe3ea;
+        text-align: left;
+      }
+
+      .search-result:hover {
+        background: rgba(255, 255, 255, 0.055);
+        border-color: rgba(255, 255, 255, 0.08);
+      }
+
+      .search-result.selected {
+        background: rgba(58, 122, 254, 0.10);
+        border-color: rgba(58, 122, 254, 0.28);
+      }
+
+      .search-result-id {
+        font-weight: 700;
+        font-size: 12px;
+        color: #f0f3f7;
+      }
+
+      .search-result-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        color: #aeb4be;
+        font-size: 11px;
+      }
+
+      .search-result-status {
+        justify-self: end;
+        max-width: 80px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        padding: 3px 6px;
+        border-radius: 999px;
+        color: #15191d;
+        font-size: 9px;
+        font-weight: 700;
+      }
+
+      .search-empty {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        align-items: center;
+        padding: 36px 20px;
+        text-align: center;
+        color: #7e8692;
+        font-size: 11px;
+      }
+
+      .search-empty strong {
+        color: #dfe3ea;
+        font-size: 13px;
       }
 
       /* ---- Map settings ---------------------------------------------- */
@@ -1370,6 +1608,33 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
+  protected readonly searchQuery = signal('');
+
+  protected readonly searchableBooths = computed(() =>
+    this.searchableSpaces().filter((space) => space.type === 'booth'),
+  );
+
+  protected readonly searchResults = computed(() => {
+    const query = this.searchQuery().trim().toLowerCase();
+    const booths = this.searchableBooths();
+
+    if (!query) return booths.slice(0, 12);
+
+    const terms = query.split(/\s+/).filter(Boolean);
+    return booths
+      .filter((space) => {
+        const haystack = [
+          space.id,
+          space.properties.name ?? '',
+          space.properties.status ?? '',
+          this.statusLabel(space.properties.status),
+        ].join(' ').toLowerCase();
+        return terms.every((term) => haystack.includes(term));
+      })
+      .slice(0, 20);
+  });
+
+  protected readonly searchableSpaces = signal<Space[]>([]);
 
   protected readonly benchSizes = BENCH_SIZES;
   protected get statusOptions(): string[] {
@@ -1410,6 +1675,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setSettings(this.buildSettings());
       this.applyStatusStyles();
       this.engine.loadSpaces(this.spaces ?? TEST_SPACES);
+      this.searchableSpaces.set(this.engine.exportData().spaces);
       this.engineReady = true;
       this.ready.emit();
       // Start from a complete map view instead of the engine's 60px/60px
@@ -1465,7 +1731,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       );
 
       this.engine.on('spaceschange', (spaces) =>
-        this.zone.run(() => this.spacesChange.emit(spaces)),
+        this.zone.run(() => {
+          this.searchableSpaces.set(spaces);
+          this.spacesChange.emit(spaces);
+        }),
       );
 
       // FPS updates several times a second — too frequent to route through
@@ -1721,6 +1990,44 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setVisualFilter({ type: 'status', status: kind });
     }
     this.filterChange.emit(kind);
+  }
+
+  protected clearSearch(): void {
+    this.searchQuery.set('');
+  }
+
+  protected searchDisplayName(space: Space): string {
+    const name = space.properties.name ?? space.id;
+    return name.split('\\n')[0] || space.id;
+  }
+
+  protected searchLongName(space: Space): string {
+    const name = space.properties.name ?? '';
+    const lines = name.split('\\n');
+    return lines.length > 1 ? lines.slice(1).join(' ') : (name === space.id ? 'Untitled booth' : name);
+  }
+
+  protected statusColor(status: string | undefined): string {
+    return this.statusDefinitions.find((item) => item.key === status)?.color ?? '#64748b';
+  }
+
+  protected openSearchResult(id: string): void {
+    this.engine.camera.flyTo(id, { duration: 450 });
+  }
+
+  /** Programmatic search helper for surrounding Angular code. */
+  searchSpaces(query: string): Space[] {
+    const terms = query.trim().toLowerCase().split(/\\s+/).filter(Boolean);
+    return this.searchableBooths().filter((space) => {
+      if (terms.length === 0) return true;
+      const haystack = [
+        space.id,
+        space.properties.name ?? '',
+        space.properties.status ?? '',
+        this.statusLabel(space.properties.status),
+      ].join(' ').toLowerCase();
+      return terms.every((term) => haystack.includes(term));
+    });
   }
 
   protected statusLabel(status: string | undefined): string {
