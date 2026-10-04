@@ -214,7 +214,11 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
 
       <div class="canvas-area">
         @if (mode() === 'view' && searchEnabled()) {
-          <aside class="search-panel" aria-label="Search spaces">
+          <aside
+            class="search-panel"
+            [class.collapsed]="!searchListOpen()"
+            aria-label="Search spaces"
+          >
             <div class="search-panel-header">
               <div>
                 <strong>Find a booth</strong>
@@ -861,6 +865,12 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
         background: rgba(18, 20, 26, 0.96);
         border-right: 1px solid rgba(255, 255, 255, 0.10);
         box-shadow: 14px 0 35px rgba(0, 0, 0, 0.16);
+      }
+
+      .search-panel.collapsed {
+        bottom: auto;
+        height: auto;
+        max-height: none;
       }
 
       .search-panel-header {
@@ -2194,23 +2204,30 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.searchHighlightedId.set(matches.length === 1 ? matches[0].id : null);
     this.engine.setSearchHighlights(ids);
 
-    // A single result, or a tight spatial cluster of results, gets the
-    // temporary black/blue fly-to locator. The camera targets the match nearest
-    // the current viewport center rather than arbitrarily choosing the first hit.
-    if (matches.length > 0 && (matches.length === 1 || this.isSearchCluster(matches))) {
+    // A single result or a tight cluster flies to the nearest matching booth.
+    // A scattered multi-result search zooms out to show all matching booths.
+    if (matches.length === 1 || this.isSearchCluster(matches)) {
       const nearest = this.nearestSearchMatch(matches);
       this.engine.camera.flyTo(nearest.id, {
         padding: MAP_VIEW_PADDING,
         maxZoom: 1.8,
         duration: 450,
       });
+    } else {
+      this.engine.camera.fitBounds(ids, {
+        padding: MAP_VIEW_PADDING,
+        maxZoom: 1.15,
+        duration: 450,
+      });
+    }
 
-      if (this.focusEnabled && this.focusDurationMs > 0) {
-        this.engine.focusSpaces(ids, {
-          durationMs: this.focusDurationMs,
-          color: '#111827',
-        });
-      }
+    // The temporary focus rope is applied to every current match, regardless
+    // of whether the camera flies to one result or fits the multi-result set.
+    if (this.focusEnabled && this.focusDurationMs > 0) {
+      this.engine.focusSpaces(ids, {
+        durationMs: this.focusDurationMs,
+        color: '#111827',
+      });
     } else {
       this.engine.focusSpaces([]);
     }
@@ -2296,16 +2313,21 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setSearchHighlights(ids);
       this.searchHighlightedId.set(id);
 
-      const target = query && (matches.length === 1 || this.isSearchCluster(matches))
-        ? this.nearestSearchMatch(matches)
-        : this.engine.getSpace(id);
-
-      if (target) {
-        this.engine.camera.flyTo(target.id, {
+      if (query && matches.length > 1 && !this.isSearchCluster(matches)) {
+        this.engine.camera.fitBounds(ids, {
           padding: MAP_VIEW_PADDING,
-          maxZoom: 1.8,
+          maxZoom: 1.15,
           duration: 450,
         });
+      } else {
+        const target = query ? this.nearestSearchMatch(matches) : this.engine.getSpace(id);
+        if (target) {
+          this.engine.camera.flyTo(target.id, {
+            padding: MAP_VIEW_PADDING,
+            maxZoom: 1.8,
+            duration: 450,
+          });
+        }
       }
 
       if (this.focusEnabled && this.focusDurationMs > 0) {
