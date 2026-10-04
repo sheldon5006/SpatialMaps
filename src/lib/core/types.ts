@@ -29,6 +29,8 @@ export type SpaceGeometry = RectangleGeometry;
 export interface SpaceProperties {
   name?: string;
   status?: SpaceStatus;
+  /** Rendered as an image fill on top of the status color when set. */
+  imageUrl?: string;
   [key: string]: unknown;
 }
 

@@ -86,7 +86,7 @@ export class SpatialMapEngine {
     app.stage.addChild(this.world);
 
     const cameraEngine = new Camera(this.world);
-    this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.zoom);
+    this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.getState());
     this.transitions = new CameraTransitions(app, cameraEngine, (ids) =>
       this.renderer!.getSpaces(ids),
     );
@@ -115,6 +115,10 @@ export class SpatialMapEngine {
 
   getSpaceCount(): number {
     return this.renderer?.getSpaceCount() ?? 0;
+  }
+
+  getSpace(id: string): Space | undefined {
+    return this.renderer?.getSpace(id);
   }
 
   loadSpaces(spaces: Space[]): void {
