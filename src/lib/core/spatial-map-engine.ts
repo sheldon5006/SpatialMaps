@@ -141,7 +141,17 @@ export class SpatialMapEngine {
     app.stage.on('pointerupoutside', this.onPointerUp);
 
     app.canvas.addEventListener('wheel', this.onWheel, { passive: false });
+
+    // Don't rely on app.screen being mutated in place on resize — reassign
+    // hitArea explicitly so empty-canvas drag/wheel keep working at the
+    // new size even if that internal detail ever changes.
+    app.renderer.on('resize', this.onResize);
   }
+
+  private readonly onResize = (): void => {
+    if (!this.app) return;
+    this.app.stage.hitArea = this.app.screen;
+  };
 
   private readonly onPointerDown = (event: FederatedPointerEvent): void => {
     // User input always wins: drop any in-flight camera transition instead
@@ -424,6 +434,7 @@ export class SpatialMapEngine {
       this.app.stage.off('pointerup', this.onPointerUp);
       this.app.stage.off('pointerupoutside', this.onPointerUp);
       this.app.canvas.removeEventListener('wheel', this.onWheel);
+      this.app.renderer.off('resize', this.onResize);
     }
 
     this.transition = null;
