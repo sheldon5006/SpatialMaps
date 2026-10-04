@@ -199,10 +199,31 @@ export class SpaceRenderer {
     if (this.mode === mode) return;
     this.cancelDrag();
     this.mode = mode;
+
+    // Editor mode allows selecting any booth. When returning to view mode,
+    // revalidate those editor-only selections against the real selection rule.
+    if (mode === 'view') {
+      const invalidated: string[] = [];
+      for (const id of Array.from(this.selectedIds)) {
+        const space = this.spaceData.get(id);
+        if (!space || !this.isSelectable(space)) {
+          this.selectedIds.delete(id);
+          invalidated.push(id);
+        }
+      }
+
+      if (invalidated.length > 0) {
+        invalidated.forEach((id) => this.repaint(id));
+        this.events.emit('select', Array.from(this.selectedIds));
+        this.events.emit('selectioninvalidated', invalidated);
+      }
+    }
+
     this.spaceData.forEach((space, id) => this.updateCursor(id, space));
     // The rotation handle only shows for a selected space in edit mode,
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
+    this.updateFocusEffect();
     this.events.emit('modechange', mode);
   }
 
@@ -338,7 +359,7 @@ export class SpaceRenderer {
     // A status/data change can make a previously selected space invalid
     // (e.g. a backend update marks it sold) — the UI must never keep
     // showing a selection the business rules no longer allow.
-    if (this.selectedIds.has(id) && !this.isSelectable(merged)) {
+    if (this.mode !== 'edit' && this.selectedIds.has(id) && !this.isSelectable(merged)) {
       this.selectedIds.delete(id);
       this.repaint(id);
       this.updateFocusEffect();
@@ -385,7 +406,13 @@ export class SpaceRenderer {
     if (selected === this.selectedIds.has(id)) return;
     if (selected) {
       const space = this.spaceData.get(id);
-      if (!space || !this.isSelectable(space)) return;
+      if (!space) return;
+
+      // Editor users must be able to select any booth, regardless of
+      // availability/reservation status. The business selection rule is
+      // enforced only in view mode.
+      if (this.mode !== 'edit' && !this.isSelectable(space)) return;
+
       this.selectedIds.add(id);
     } else {
       this.selectedIds.delete(id);
@@ -476,7 +503,12 @@ export class SpaceRenderer {
 
   private createSpaceNode(space: Space): SpaceNode {
     const node = new Container();
+    // Explicit z-order prevents async image loading or the glass overlay from
+    // ever covering booth names/selection affordances.
+    node.sortableChildren = true;
+
     const shape = new Graphics();
+    shape.zIndex = 0;
     // The shape provides its own hit area from its drawn rect — the node
     // deliberately has NO explicit hitArea of its own. Setting one would
     // make Pixi treat it as the only hit region for the whole subtree,
@@ -496,14 +528,16 @@ export class SpaceRenderer {
     });
     label.eventMode = 'none';
     label.anchor.set(0.5);
+    label.zIndex = 10;
     node.addChild(label);
 
-    // The "glass pane" — a translucent cool-toned overlay shown only when
-    // this space is receded behind another one's focus. Lives above the
-    // label/image so it genuinely reads as a pane sitting over the booth.
+    // Liquid-glass overlay shown only when an active visual filter recedes
+    // this space. Its z-index is intentionally below the booth label so the
+    // booth name is never covered.
     const glass = new Graphics();
     glass.eventMode = 'none';
     glass.visible = false;
+    glass.zIndex = 5;
     node.addChild(glass);
 
     // Selected-state badge — a small check mark, visible regardless of the
@@ -512,10 +546,12 @@ export class SpaceRenderer {
     const checkBadge = new Graphics();
     checkBadge.eventMode = 'none';
     checkBadge.visible = false;
+    checkBadge.zIndex = 20;
     node.addChild(checkBadge);
 
     const handle = new Graphics();
     handle.eventMode = 'none';
+    handle.zIndex = 30;
     handle.hitArea = new Circle(0, 0, HANDLE_HIT_RADIUS);
     handle.visible = false;
     handle.cursor = 'grab';
@@ -807,6 +843,7 @@ export class SpaceRenderer {
     sprite.width = space.geometry.width;
     sprite.height = space.geometry.height;
     sprite.position.set(space.geometry.width / 2, space.geometry.height / 2);
+    sprite.zIndex = 2;
     entry.node.addChild(sprite);
     entry.image = { sprite, url };
 
