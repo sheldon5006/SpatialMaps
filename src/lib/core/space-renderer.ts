@@ -1624,19 +1624,8 @@ export class SpaceRenderer {
 
     if (loop.length < 2 || perimeter <= 0) return;
 
-    // A thin neutral track gives the rope a physical rail without becoming a border.
-    for (let i = 0; i < loop.length; i += 1) {
-      const a = loop[i];
-      const b = loop[(i + 1) % loop.length];
-      highlight.moveTo(a.x, a.y);
-      highlight.lineTo(b.x, b.y);
-    }
-    highlight.stroke({
-      color: 0x64748b,
-      alpha: 0.24 * strength,
-      width: 0.75,
-    });
-
+    // No static border/overlay is added. The booth keeps its original color;
+    // only the moving rope and the separate cast shadow are visible.
     // Tiny italic strokes march around the loop. Two colors alternate to make
     // the movement easy to perceive without creating a luminous halo.
     const dashLength = Math.max(4, Math.min(6, minSide * 0.07));
@@ -1675,9 +1664,9 @@ export class SpaceRenderer {
       highlight.moveTo(cx - dx, cy - dy);
       highlight.lineTo(cx + dx, cy + dy);
       highlight.stroke({
-        color: index % 2 === 0 ? 0x00d9ff : 0x9ca3af,
-        alpha: 0.90 * strength,
-        width: 1.45,
+        color: index % 2 === 0 ? 0x00efff : 0xe5e7eb,
+        alpha: 0.98 * strength,
+        width: 1.7,
         cap: 'round',
       });
     }
