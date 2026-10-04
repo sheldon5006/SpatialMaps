@@ -115,7 +115,10 @@ export class CameraTransitions {
 
     let targetZoom = Math.min(availableWidth / contentWidth, availableHeight / contentHeight);
     if (options?.maxZoom !== undefined) targetZoom = Math.min(targetZoom, options.maxZoom);
-    targetZoom = this.camera.clampZoom(targetZoom);
+    // fitBounds must be able to show the entire map even when the user's
+    // interactive readable minimum is higher than the fitted scale. The
+    // minimum applies to manual zooming; "fit" is a navigation operation.
+    targetZoom = this.camera.clampZoom(targetZoom, true);
 
     const contentCenterX = (bounds.minX + bounds.maxX) / 2;
     const contentCenterY = (bounds.minY + bounds.maxY) / 2;
@@ -175,7 +178,7 @@ export class CameraTransitions {
       fromZoom: from.zoom,
       toX,
       toY,
-      toZoom: this.camera.clampZoom(toZoom),
+      toZoom: this.camera.clampZoom(toZoom, true),
       elapsedMs: 0,
       durationMs: duration,
     };
