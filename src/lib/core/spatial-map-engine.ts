@@ -286,6 +286,16 @@ export class SpatialMapEngine {
     this.statusStyles = { ...DEFAULT_STATUS_STYLES, ...styles };
   }
 
+  /** PixiJS's own rolling-average FPS — zero extra cost, it tracks this every frame regardless. */
+  getFps(): number {
+    return this.app?.ticker.FPS ?? 0;
+  }
+
+  /** Number of currently loaded spaces. */
+  getSpaceCount(): number {
+    return this.spaceData.size;
+  }
+
   on<K extends keyof SpatialMapEngineEvents>(
     event: K,
     listener: (payload: SpatialMapEngineEvents[K]) => void,

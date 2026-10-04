@@ -1,3 +1,4 @@
+import { DecimalPipe } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -8,7 +9,10 @@ import {
   signal,
 } from '@angular/core';
 import { SpatialMapEngine } from '../../lib/core/spatial-map-engine';
+import { generateBenchSpaces } from './generate-bench-spaces';
 import { TEST_SPACES } from './test-spaces';
+
+const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
 
 /**
  * Thin host component. It owns the <div> and the component lifecycle;
@@ -18,6 +22,7 @@ import { TEST_SPACES } from './test-spaces';
  */
 @Component({
   selector: 'app-spatial-map',
+  imports: [DecimalPipe],
   template: `
     <div class="spatial-map-root">
       <div #host class="spatial-map-host"></div>
@@ -37,6 +42,16 @@ import { TEST_SPACES } from './test-spaces';
         <button (click)="onFitAll()">Fit all</button>
         <button (click)="onFlyToRotated()">Fly to A106</button>
         <button (click)="onZoomIn()">Zoom 2x</button>
+      </div>
+      <!-- Dev harness for Step 1.8 — loads synthetic datasets to measure
+           render/pan/zoom performance at scale. #fpsReadout is written to
+           directly from outside Angular's zone, never via a signal. -->
+      <div class="dev-bench-controls">
+        @for (size of benchSizes; track size) {
+          <button (click)="onLoadBenchSize(size)">{{ size | number }}</button>
+        }
+        <button (click)="onResetFixture()">Reset</button>
+        <span #fpsReadout class="fps-readout">—</span>
       </div>
     </div>
   `,
@@ -90,16 +105,51 @@ import { TEST_SPACES } from './test-spaces';
       .dev-camera-controls button:hover {
         background: rgba(20, 22, 28, 0.9);
       }
+
+      .dev-bench-controls {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .dev-bench-controls button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        cursor: pointer;
+      }
+
+      .dev-bench-controls button:hover {
+        background: rgba(20, 22, 28, 0.9);
+      }
+
+      .fps-readout {
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: rgba(20, 22, 28, 0.75);
+        color: #7ee787;
+        font: 12px/1 ui-monospace, 'SF Mono', Consolas, monospace;
+        min-width: 11ch;
+      }
     `,
   ],
 })
 export class SpatialMap implements AfterViewInit, OnDestroy {
   @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
+  @ViewChild('fpsReadout', { static: true }) fpsReadoutRef!: ElementRef<HTMLSpanElement>;
 
   protected readonly hoveredId = signal<string | null>(null);
   protected readonly selectedIds = signal<string[]>([]);
+  protected readonly benchSizes = BENCH_SIZES;
 
   private readonly engine = new SpatialMapEngine();
+  private fpsIntervalId: ReturnType<typeof setInterval> | null = null;
 
   constructor(private readonly zone: NgZone) {}
 
@@ -113,10 +163,19 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       // the one place the demo UI needs to react to engine state.
       this.engine.on('hover', (id) => this.zone.run(() => this.hoveredId.set(id)));
       this.engine.on('select', (ids) => this.zone.run(() => this.selectedIds.set(ids)));
+
+      // FPS updates several times a second — too frequent to route through
+      // change detection for a plain text readout. Write the DOM directly.
+      this.fpsIntervalId = setInterval(() => {
+        const fps = Math.round(this.engine.getFps());
+        const count = this.engine.getSpaceCount();
+        this.fpsReadoutRef.nativeElement.textContent = `${fps} fps · ${count.toLocaleString()}`;
+      }, 250);
     });
   }
 
   ngOnDestroy(): void {
+    if (this.fpsIntervalId !== null) clearInterval(this.fpsIntervalId);
     this.engine.destroy();
   }
 
@@ -130,5 +189,15 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected onZoomIn(): void {
     this.engine.camera.setZoom(2);
+  }
+
+  protected onLoadBenchSize(count: number): void {
+    this.engine.loadSpaces(generateBenchSpaces(count));
+    this.engine.camera.fitBounds(undefined, { duration: 0 });
+  }
+
+  protected onResetFixture(): void {
+    this.engine.loadSpaces(TEST_SPACES);
+    this.engine.camera.fitBounds(undefined, { duration: 0 });
   }
 }
