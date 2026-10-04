@@ -187,8 +187,8 @@ export class SpaceRenderer {
 
   private hoveredId: string | null = null;
   private focusedId: string | null = null;
-  private searchHighlightedId: string | null = null;
-  private focusHighlightedId: string | null = null;
+  private readonly searchHighlightedIds = new Set<string>();
+  private readonly focusHighlightedIds = new Set<string>();
   private focusHighlightUntil = 0;
   private focusHighlightStartedAt = 0;
   private focusHighlightColor = DEFAULT_FOCUS_HIGHLIGHT_COLOR;
@@ -355,66 +355,107 @@ export class SpaceRenderer {
   }
 
   /**
-   * Marks a search result with a separate locator treatment.
-   * This is intentionally independent from selection/business state.
+   * Marks all current search matches with the persistent search locator.
+   * Search matching is independent from selection and business status.
    */
-  setSearchHighlight(id: string | null): void {
-    if (this.searchHighlightedId === id) return;
-    const previous = this.searchHighlightedId;
-    this.searchHighlightedId = id;
+  setSearchHighlights(ids: string[]): void {
+    const next = new Set(ids);
+    const affected = new Set<string>([
+      ...this.searchHighlightedIds,
+      ...next,
+    ]);
 
-    if (previous) {
-      this.startPressTransition(previous, this.selectedIds.has(previous) || this.focusHighlightedId === previous);
-      this.repaint(previous);
-    }
-    if (id) {
-      this.startPressTransition(id, true);
-      this.repaint(id);
-    }
+    affected.forEach((id) => {
+      const wasHighlighted = this.searchHighlightedIds.has(id);
+      const willBeHighlighted = next.has(id);
+      if (wasHighlighted !== willBeHighlighted) {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || willBeHighlighted || this.focusHighlightedIds.has(id),
+        );
+      }
+    });
+
+    this.searchHighlightedIds.clear();
+    next.forEach((id) => this.searchHighlightedIds.add(id));
+    affected.forEach((id) => this.repaint(id));
+  }
+
+  /** Backwards-compatible single-search API. */
+  setSearchHighlight(id: string | null): void {
+    this.setSearchHighlights(id ? [id] : []);
   }
 
   /**
-   * Temporarily focuses one space while a navigation/fly-to operation is
-   * taking place. The visual state is separate from selection/business state.
+   * Temporarily focuses multiple spaces while a navigation/fly-to operation
+   * is taking place. Every target receives the temporary fly-to rope.
    */
-  focusSpace(
-    id: string,
+  focusSpaces(
+    ids: string[],
     options?: { durationMs?: number; color?: string },
   ): void {
-    const durationMs = Math.max(0, options?.durationMs ?? 2000);
-    this.focusHighlightedId = id;
+    const next = new Set(ids);
+
+    this.focusHighlightedIds.forEach((id) => {
+      if (!next.has(id)) {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || this.searchHighlightedIds.has(id),
+        );
+      }
+    });
+
+    this.focusHighlightedIds.clear();
+    next.forEach((id) => {
+      this.focusHighlightedIds.add(id);
+      this.startPressTransition(id, true);
+    });
+
     this.focusHighlightStartedAt = performance.now();
-    this.focusHighlightUntil = performance.now() + durationMs;
-    this.startPressTransition(id, true);
+    this.focusHighlightUntil = performance.now() + Math.max(0, options?.durationMs ?? 2000);
     this.focusHighlightColor = this.parsePropColor(
       options?.color,
       DEFAULT_FOCUS_HIGHLIGHT_COLOR,
     );
-    this.repaint(id);
+
+    next.forEach((id) => this.repaint(id));
+  }
+
+  /** Backwards-compatible single-space API. */
+  focusSpace(
+    id: string,
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.focusSpaces([id], options);
   }
 
   /** Advances one-shot pressed-state transitions. There is no looping glow/pulse. */
   tick(deltaMS: number): void {
     const now = performance.now();
-    const focusRemaining =
-      this.focusHighlightedId !== null
-        ? this.focusHighlightUntil - now
-        : 0;
+    const focusRemaining = this.focusHighlightedIds.size > 0
+      ? this.focusHighlightUntil - now
+      : 0;
     const focusWasActive = focusRemaining > 0;
 
-    if (this.focusHighlightedId !== null && !focusWasActive) {
-      const expired = this.focusHighlightedId;
-      this.focusHighlightedId = null;
+    if (this.focusHighlightedIds.size > 0 && !focusWasActive) {
+      const expired = Array.from(this.focusHighlightedIds);
+      this.focusHighlightedIds.clear();
       this.focusHighlightUntil = 0;
       this.focusHighlightStartedAt = 0;
-      // The fly-to locator ends with its timer. A selected/search-highlighted
-      // space remains active only if that independent state still exists.
-      this.startPressTransition(expired, this.selectedIds.has(expired) || this.searchHighlightedId === expired);
+
+      expired.forEach((id) => {
+        this.startPressTransition(
+          id,
+          this.selectedIds.has(id) || this.searchHighlightedIds.has(id),
+        );
+      });
     }
 
     const activeIds = new Set<string>();
-    if (this.searchHighlightedId) activeIds.add(this.searchHighlightedId);
-    if (this.focusHighlightedId && focusWasActive) activeIds.add(this.focusHighlightedId);
+    this.searchHighlightedIds.forEach((id) => activeIds.add(id));
+    if (focusWasActive) {
+      this.focusHighlightedIds.forEach((id) => activeIds.add(id));
+    }
     this.selectedIds.forEach((id) => activeIds.add(id));
 
     if (activeIds.size === 0 && this.pressAnimations.size === 0) return;
@@ -452,8 +493,8 @@ export class SpaceRenderer {
         }
       }
 
-      const isSearch = this.searchHighlightedId === id;
-      const isFocus = this.focusHighlightedId === id && focusWasActive;
+      const isSearch = this.searchHighlightedIds.has(id);
+      const isFocus = this.focusHighlightedIds.has(id) && focusWasActive;
       const isSelected = this.selectedIds.has(id);
       const visible = isSelected || isSearch || isFocus;
 
@@ -494,8 +535,8 @@ export class SpaceRenderer {
   private startPressTransition(id: string, pressed: boolean): void {
     const current = this.pressAnimations.get(id)?.progress ??
       ((this.selectedIds.has(id) ||
-        this.searchHighlightedId === id ||
-        this.focusHighlightedId === id) ? 1 : 0);
+        this.searchHighlightedIds.has(id) ||
+        this.focusHighlightedIds.has(id)) ? 1 : 0);
 
     this.pressAnimations.set(id, {
       progress: current,
@@ -531,6 +572,8 @@ export class SpaceRenderer {
     this.spaceNodes.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
+    this.searchHighlightedIds.clear();
+    this.focusHighlightedIds.clear();
     this.pressAnimations.clear();
     this.hoveredId = null;
 
@@ -1302,8 +1345,8 @@ export class SpaceRenderer {
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
-    const isSearchHighlighted = this.searchHighlightedId === space.id;
-    const isFocusHighlighted = this.focusHighlightedId === space.id &&
+    const isSearchHighlighted = this.searchHighlightedIds.has(space.id);
+    const isFocusHighlighted = this.focusHighlightedIds.has(space.id) &&
       performance.now() < this.focusHighlightUntil;
     const isSelected = this.selectedIds.has(space.id);
     const initiallyVisible =
