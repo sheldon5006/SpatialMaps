@@ -15,7 +15,6 @@ import {
   Space,
   SpaceElementType,
   SpaceGeometry,
-  SpacePropKind,
   SpaceStatus,
 } from '../../lib/core/types';
 import { generateBenchSpaces } from './generate-bench-spaces';
@@ -1121,7 +1120,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       type: savedType,
       geometry: { type: shape, width: w, height: h },
       properties: {
-        name: savedType === 'booth' ? (name || id) : undefined,
+        name: name || id,
         status,
         propColor: savedType === 'prop' && propRepresentation === 'shape' ? propColor : undefined,
         imageUrl: (savedType === 'booth' && shape === 'rectangle') ||
