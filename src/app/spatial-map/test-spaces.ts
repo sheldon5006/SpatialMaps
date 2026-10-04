@@ -384,9 +384,42 @@ const boothGrid = (
 
 export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
-  // Base illustration / branding
+  // Base map — intentionally composed from editable props/text instead of
+  // one large background image. This keeps roads, districts and landmarks
+  // aligned with the same coordinate system as the interactive booths.
   // ------------------------------------------------------------------------
-  imageProp('site-backdrop', 'Outdoor Market Map', 0, 0, 1200, 1500, marketBackdrop()),
+  prop('ground', 'Market Ground', 0, 0, 1200, 1500, '#f3f0e8', 'rectangle'),
+  prop('north-spine', 'North South Road', 522, 0, 156, 1500, '#c8c6bf', 'rounded-rectangle'),
+  prop('main-cross', 'Main East West Road', 0, 735, 1200, 150, '#c8c6bf', 'rounded-rectangle'),
+  prop('upper-cross', 'Upper Market Road', 115, 492, 970, 82, '#d0cec8', 'rounded-rectangle'),
+  prop('lower-cross', 'Lower Market Road', 72, 1008, 1050, 82, '#d0cec8', 'rounded-rectangle'),
+  prop('central-loop', 'Central Loop Road', 430, 500, 340, 78, '#d1cfca', 'rounded-rectangle'),
+
+  // Parking lots
+  prop('parking-west-lot', 'West Parking Lot', 18, 208, 192, 270, '#55585b', 'rounded-rectangle'),
+  prop('parking-east-lot', 'East Parking Lot', 990, 170, 192, 300, '#55585b', 'rounded-rectangle'),
+  prop('parking-south-lot', 'South Parking Lot', 20, 1150, 300, 300, '#55585b', 'rounded-rectangle'),
+  prop('parking-family-lot', 'Family Parking Lot', 892, 1110, 282, 340, '#55585b', 'rounded-rectangle'),
+
+  // Districts / neighborhood footprints
+  prop('north-bazaar-zone', 'North Bazaar District', 238, 50, 260, 178, '#f0c39a', 'rounded-rectangle'),
+  prop('north-east-zone', 'North East District', 704, 52, 262, 172, '#edb8c2', 'rounded-rectangle'),
+  prop('garden-zone', 'Garden Market District', 246, 270, 254, 188, '#c6e0a9', 'rounded-rectangle'),
+  prop('riverside-zone', 'Riverside Row District', 700, 272, 254, 188, '#b9d9ee', 'rounded-rectangle'),
+  prop('food-zone', 'Food Court District', 238, 608, 262, 102, '#f2dcae', 'rounded-rectangle'),
+  prop('service-zone', 'Service Plaza District', 700, 608, 260, 102, '#d9d5ea', 'rounded-rectangle'),
+  prop('west-market-zone', 'West Market District', 235, 910, 266, 92, '#bcd9c3', 'rounded-rectangle'),
+  prop('east-market-zone', 'East Market District', 702, 910, 265, 92, '#f0c7a0', 'rounded-rectangle'),
+
+  // Parks / water / event structures
+  prop('west-lawn', 'West Market Lawn', 286, 560, 226, 160, '#d7ebcf', 'ellipse'),
+  prop('east-lawn', 'East Market Lawn', 688, 560, 226, 160, '#d7ebcf', 'ellipse'),
+  prop('market-pond', 'Market Pond', 542, 566, 124, 92, '#78b9cf', 'ellipse'),
+  prop('food-tent', 'Food Court Tent', 42, 610, 224, 120, '#eadfc9', 'triangle'),
+  prop('event-stage', 'Live Stage', 996, 585, 170, 116, '#334149', 'rounded-rectangle'),
+  prop('market-office-zone', 'Market Office', 394, 1204, 184, 140, '#e4aa72', 'rounded-rectangle'),
+
+  // Branded image used as an accent, not as the whole map.
   imageProp('market-logo', 'Riverside Outdoor Market', 48, 28, 340, 122, marketLogo()),
 
   // ------------------------------------------------------------------------
