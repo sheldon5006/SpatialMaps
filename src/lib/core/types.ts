@@ -25,6 +25,10 @@ export interface RectangleGeometry extends BaseGeometry {
   type: 'rectangle';
 }
 
+export interface RoundedRectangleGeometry extends BaseGeometry {
+  type: 'rounded-rectangle';
+}
+
 export interface CircleGeometry extends BaseGeometry {
   type: 'circle';
 }
@@ -33,8 +37,31 @@ export interface EllipseGeometry extends BaseGeometry {
   type: 'ellipse';
 }
 
-/** Basic vector shapes supported by the editor. */
-export type SpaceGeometry = RectangleGeometry | CircleGeometry | EllipseGeometry;
+export interface TriangleGeometry extends BaseGeometry {
+  type: 'triangle';
+}
+
+export interface DiamondGeometry extends BaseGeometry {
+  type: 'diamond';
+}
+
+/**
+ * A thin rotated segment. Its width represents the path/line length and
+ * height represents its thickness.
+ */
+export interface LineGeometry extends BaseGeometry {
+  type: 'line';
+}
+
+/** Basic vector shapes for building simple venue/market maps. */
+export type SpaceGeometry =
+  | RectangleGeometry
+  | RoundedRectangleGeometry
+  | CircleGeometry
+  | EllipseGeometry
+  | TriangleGeometry
+  | DiamondGeometry
+  | LineGeometry;
 
 export interface SpaceProperties {
   name?: string;
