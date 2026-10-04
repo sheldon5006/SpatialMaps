@@ -13,7 +13,6 @@ import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
-  SpacePropKind,
   SpaceStatus,
   StatusStyle,
   StatusStyleMap,
