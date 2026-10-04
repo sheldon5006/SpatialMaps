@@ -1,4 +1,4 @@
-import { Container, Graphics } from 'pixi.js';
+import { Container, FederatedPointerEvent, Graphics } from 'pixi.js';
 import { TypedEmitter } from './event-emitter';
 import {
   DEFAULT_STATUS_STYLES,
@@ -12,22 +12,36 @@ const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
 const SELECTED_STROKE_WIDTH = 3;
 
+/**
+ * 'view': hover + select + pan/zoom (the search/rental viewer experience).
+ * 'edit': spaces can be dragged to a new position. Hover/select still work.
+ */
+export type MapMode = 'view' | 'edit';
+
 export interface SpaceRendererEvents extends Record<string, unknown> {
   hover: string | null;
   select: string[];
+  modechange: MapMode;
+  /** Fires once, when a drag in edit mode ends — not on every pointermove. */
+  spacemoved: { id: string; geometry: Space['geometry'] };
 }
 
 /**
  * SpaceRenderer
  *
  * Owns the loaded spaces (both their data and their PixiJS graphics),
- * the hover/selection interaction state, and everything about painting
- * a space: status color, hover outline, selection outline. This is the
- * engine's data layer — addSpace/updateSpace/removeSpace/loadSpaces all
- * live here, alongside the pointer handlers that drive hover/select.
+ * the hover/selection/drag interaction state, and everything about
+ * painting a space: status color, hover outline, selection outline.
+ * This is the engine's data layer — addSpace/updateSpace/removeSpace/
+ * loadSpaces all live here, alongside the pointer handlers that drive
+ * hover/select/drag.
  *
- * It does not know about the camera, transitions, or app-level setup —
- * it only needs a `world` container to add/remove graphics from.
+ * It does not know about the camera's pan/zoom transitions or app-level
+ * setup — it only needs a `world` container to add/remove graphics
+ * from, a `stage` to listen for drag-continuation events on (the same
+ * pattern PointerInteraction uses for panning), and a zoom getter so
+ * drag deltas convert from screen space to world space correctly at
+ * any zoom level.
  */
 export class SpaceRenderer {
   private readonly spaceGraphics = new Map<string, Graphics>();
@@ -37,9 +51,41 @@ export class SpaceRenderer {
   private hoveredId: string | null = null;
   private readonly selectedIds = new Set<string>();
 
+  private mode: MapMode = 'view';
+  private draggingId: string | null = null;
+  private dragStartPointerX = 0;
+  private dragStartPointerY = 0;
+  private dragStartGeomX = 0;
+  private dragStartGeomY = 0;
+
   readonly events = new TypedEmitter<SpaceRendererEvents>();
 
-  constructor(private readonly world: Container) {}
+  constructor(
+    private readonly world: Container,
+    private readonly stage: Container,
+    private readonly getZoom: () => number,
+  ) {
+    // Drag continuation: like PointerInteraction's panning, these use the
+    // "global" variants so the drag keeps tracking the pointer even once
+    // it moves outside the dragged shape's own bounds.
+    this.stage.on('globalpointermove', this.onDragMove);
+    this.stage.on('pointerup', this.onDragEnd);
+    this.stage.on('pointerupoutside', this.onDragEnd);
+  }
+
+  /** Switches between the view (hover/select/pan/zoom) and edit (+ drag-to-move) experiences. */
+  setMode(mode: MapMode): void {
+    if (this.mode === mode) return;
+    this.cancelDrag();
+    this.mode = mode;
+    const cursor = mode === 'edit' ? 'move' : 'pointer';
+    this.spaceGraphics.forEach((graphic) => (graphic.cursor = cursor));
+    this.events.emit('modechange', mode);
+  }
+
+  getMode(): MapMode {
+    return this.mode;
+  }
 
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
@@ -63,6 +109,7 @@ export class SpaceRenderer {
    * proving the data model now.
    */
   loadSpaces(spaces: Space[]): void {
+    this.cancelDrag();
     this.world.removeChildren();
     this.spaceGraphics.clear();
     this.spaceData.clear();
@@ -115,7 +162,7 @@ export class SpaceRenderer {
     this.applyGeometry(graphic, merged.geometry);
   }
 
-  /** Removes one space. Clears it from hover/selection state if applicable. */
+  /** Removes one space. Clears it from hover/selection/drag state if applicable. */
   removeSpace(id: string): void {
     const graphic = this.spaceGraphics.get(id);
     if (!graphic) {
@@ -123,6 +170,7 @@ export class SpaceRenderer {
       return;
     }
 
+    if (this.draggingId === id) this.cancelDrag();
     this.world.removeChild(graphic);
     graphic.destroy();
     this.spaceGraphics.delete(id);
@@ -158,6 +206,11 @@ export class SpaceRenderer {
   }
 
   destroy(): void {
+    this.stage.off('globalpointermove', this.onDragMove);
+    this.stage.off('pointerup', this.onDragEnd);
+    this.stage.off('pointerupoutside', this.onDragEnd);
+
+    this.cancelDrag();
     this.spaceGraphics.clear();
     this.spaceData.clear();
     this.selectedIds.clear();
@@ -170,14 +223,57 @@ export class SpaceRenderer {
     this.applyGeometry(graphic, space.geometry);
 
     graphic.eventMode = 'static';
-    graphic.cursor = 'pointer';
+    graphic.cursor = this.mode === 'edit' ? 'move' : 'pointer';
     graphic.label = space.id;
 
     graphic.on('pointerover', () => this.setHover(space.id));
     graphic.on('pointerout', () => this.setHover(null));
     graphic.on('pointertap', () => this.selectSpace(space.id, !this.selectedIds.has(space.id)));
+    graphic.on('pointerdown', (event) => this.onSpacePointerDown(space.id, event));
 
     return graphic;
+  }
+
+  private readonly onSpacePointerDown = (id: string, event: FederatedPointerEvent): void => {
+    if (this.mode !== 'edit') return;
+
+    const space = this.spaceData.get(id);
+    if (!space) return;
+
+    // Stop this pointerdown from reaching PointerInteraction's stage-level
+    // listener, so dragging a space never also pans the camera underneath it.
+    event.stopPropagation();
+
+    this.draggingId = id;
+    this.dragStartPointerX = event.global.x;
+    this.dragStartPointerY = event.global.y;
+    this.dragStartGeomX = space.geometry.x;
+    this.dragStartGeomY = space.geometry.y;
+  };
+
+  private readonly onDragMove = (event: FederatedPointerEvent): void => {
+    if (!this.draggingId) return;
+
+    const zoom = this.getZoom();
+    const dx = (event.global.x - this.dragStartPointerX) / zoom;
+    const dy = (event.global.y - this.dragStartPointerY) / zoom;
+
+    this.updateSpace(this.draggingId, {
+      geometry: { x: this.dragStartGeomX + dx, y: this.dragStartGeomY + dy },
+    });
+  };
+
+  private readonly onDragEnd = (): void => {
+    if (!this.draggingId) return;
+    const id = this.draggingId;
+    this.draggingId = null;
+
+    const space = this.spaceData.get(id);
+    if (space) this.events.emit('spacemoved', { id, geometry: space.geometry });
+  };
+
+  private cancelDrag(): void {
+    this.draggingId = null;
   }
 
   /** Positions/rotates a graphic from its geometry. Shared by create and updateSpace. */

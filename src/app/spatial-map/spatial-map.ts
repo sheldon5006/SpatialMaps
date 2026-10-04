@@ -8,7 +8,7 @@ import {
   ViewChild,
   signal,
 } from '@angular/core';
-import { SpatialMapEngine } from '../../lib/core/spatial-map-engine';
+import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
 import { generateBenchSpaces } from './generate-bench-spaces';
 import { TEST_SPACES } from './test-spaces';
 
@@ -26,13 +26,16 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
   template: `
     <div class="spatial-map-root">
       <div #host class="spatial-map-host"></div>
-      @if (hoveredId() || selectedIds().length) {
+      @if (hoveredId() || selectedIds().length || lastMoved()) {
         <div class="status-overlay">
           @if (hoveredId()) {
             <span>Hover: {{ hoveredId() }}</span>
           }
           @if (selectedIds().length) {
             <span>Selected: {{ selectedIds().join(', ') }}</span>
+          }
+          @if (lastMoved(); as moved) {
+            <span>Moved: {{ moved }}</span>
           }
         </div>
       }
@@ -68,6 +71,13 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
       <div class="dev-io-controls">
         <button (click)="onExport()">Export JSON</button>
         <button (click)="onImportLastExport()" [disabled]="!lastExportJson">Import last export</button>
+      </div>
+      <!-- Dev harness for Step 1.11 — view/edit mode toggle. In edit mode,
+           dragging any space moves it; drop it to fire the spacemoved
+           event, shown briefly in the status overlay above. -->
+      <div class="dev-mode-controls">
+        <span class="mode-label">{{ mode() === 'edit' ? 'Edit mode — drag spaces to move them' : 'View mode' }}</span>
+        <button (click)="onToggleMode()">{{ mode() === 'edit' ? 'Switch to View' : 'Switch to Edit' }}</button>
       </div>
     </div>
   `,
@@ -202,6 +212,37 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
         opacity: 0.4;
         cursor: default;
       }
+
+      .dev-mode-controls {
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .mode-label {
+        padding: 6px 10px;
+        border-radius: 6px;
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+
+      .dev-mode-controls button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        cursor: pointer;
+      }
+
+      .dev-mode-controls button:hover {
+        background: rgba(20, 22, 28, 0.9);
+      }
     `,
   ],
 })
@@ -211,6 +252,8 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected readonly hoveredId = signal<string | null>(null);
   protected readonly selectedIds = signal<string[]>([]);
+  protected readonly lastMoved = signal<string | null>(null);
+  protected readonly mode = signal<MapMode>('view');
   protected readonly benchSizes = BENCH_SIZES;
 
   private readonly engine = new SpatialMapEngine();
@@ -228,6 +271,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
       // the one place the demo UI needs to react to engine state.
       this.engine.on('hover', (id) => this.zone.run(() => this.hoveredId.set(id)));
       this.engine.on('select', (ids) => this.zone.run(() => this.selectedIds.set(ids)));
+      this.engine.on('modechange', (mode) => this.zone.run(() => this.mode.set(mode)));
+      this.engine.on('spacemoved', ({ id, geometry }) =>
+        this.zone.run(() => {
+          this.lastMoved.set(`${id} → (${Math.round(geometry.x)}, ${Math.round(geometry.y)})`);
+        }),
+      );
 
       // FPS updates several times a second — too frequent to route through
       // change detection for a plain text readout. Write the DOM directly.
@@ -312,5 +361,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     if (!this.lastExportJson) return;
     this.engine.importData(JSON.parse(this.lastExportJson));
     this.engine.camera.fitBounds(undefined, { duration: 0 });
+  }
+
+  protected onToggleMode(): void {
+    this.engine.setMode(this.mode() === 'edit' ? 'view' : 'edit');
   }
 }

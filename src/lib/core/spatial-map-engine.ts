@@ -2,7 +2,7 @@ import { Application, Container } from 'pixi.js';
 import { Camera } from './camera';
 import { CameraTransitions, TransitionOptions } from './camera-transitions';
 import { PointerInteraction } from './pointer-interaction';
-import { SpaceRenderer, SpaceRendererEvents } from './space-renderer';
+import { MapMode, SpaceRenderer, SpaceRendererEvents } from './space-renderer';
 import {
   SPATIAL_MAP_EXPORT_VERSION,
   Space,
@@ -11,6 +11,7 @@ import {
 } from './types';
 
 export type SpatialMapEngineEvents = SpaceRendererEvents;
+export type { MapMode };
 
 /**
  * SpatialMapEngine
@@ -24,8 +25,13 @@ export type SpatialMapEngineEvents = SpaceRendererEvents;
  *
  *   PointerInteraction — raw pointer/wheel/resize events → Camera
  *   CameraTransitions  — flyTo/fitBounds/setZoom animations → Camera
- *   SpaceRenderer       — loaded spaces, painting, hover/select state
+ *   SpaceRenderer       — loaded spaces, painting, hover/select/drag state
  *   Camera (camera.ts)  — the world container's pan/zoom transform
+ *
+ * In edit mode, SpaceRenderer intercepts a space's pointerdown before it
+ * reaches PointerInteraction (via stopPropagation), so dragging a space
+ * never also pans the camera — no shared "what's happening" flag needed
+ * between the two, the event system handles it.
  *
  * Everything below either sets this up (init/destroy) or forwards a
  * public method call to whichever collaborator owns that concern.
@@ -80,7 +86,7 @@ export class SpatialMapEngine {
     app.stage.addChild(this.world);
 
     const cameraEngine = new Camera(this.world);
-    this.renderer = new SpaceRenderer(this.world);
+    this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.zoom);
     this.transitions = new CameraTransitions(app, cameraEngine, (ids) =>
       this.renderer!.getSpaces(ids),
     );
@@ -138,6 +144,15 @@ export class SpatialMapEngine {
 
   clearSelection(): void {
     this.renderer?.clearSelection();
+  }
+
+  /** 'view' (hover/select/pan/zoom) or 'edit' (+ drag spaces to reposition them). */
+  setMode(mode: MapMode): void {
+    this.renderer?.setMode(mode);
+  }
+
+  getMode(): MapMode {
+    return this.renderer?.getMode() ?? 'view';
   }
 
   on<K extends keyof SpatialMapEngineEvents>(
