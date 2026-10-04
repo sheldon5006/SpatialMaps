@@ -1064,13 +1064,16 @@ export class SpaceRenderer {
 
     if (space.type === 'booth') {
       // Image fills currently support rectangles only.
+      const displayColor = this.parsePropColor(properties.displayColor, style.fill);
+      const displayStroke = this.parsePropColor(properties.displayStrokeColor, style.stroke ?? style.fill);
+
       entry.shape.fill({
-        color: style.fill,
+        color: displayColor,
         alpha: hasImage && geometry.type === 'rectangle' ? 0 : (style.fillAlpha ?? 1),
       });
 
       if (style.strokeWidth) {
-        entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
+        entry.shape.stroke({ color: displayStroke, width: style.strokeWidth });
       }
     } else if (space.type === 'textbox') {
       // Textboxes have no status fill. Only draw interaction outlines.
@@ -1209,10 +1212,20 @@ export class SpaceRenderer {
       : (screenWidth < 76 ? 10 : 11.5);
 
     entry.label.style.fontSize = targetScreenFont / zoom;
-    entry.label.style.fill = showTextboxText ? 0x243039 : LABEL_COLOR;
-    entry.label.style.stroke = showTextboxText
-      ? { color: 0xffffff, width: Math.min(4, 1.8 / zoom) }
-      : { color: LABEL_OUTLINE_COLOR, width: Math.min(4, 2.2 / zoom) };
+    const textColor = this.parsePropColor(
+      space.properties.displayTextColor,
+      showTextboxText ? '#243039' : LABEL_COLOR,
+    );
+    const outlineColor = this.parsePropColor(
+      space.properties.displayTextOutlineColor,
+      showTextboxText ? '#ffffff' : LABEL_OUTLINE_COLOR,
+    );
+    const outlineWidth = space.properties.displayTextOutlineColor === 'transparent'
+      ? 0
+      : Math.min(4, showTextboxText ? 1.8 / zoom : 2.2 / zoom);
+
+    entry.label.style.fill = textColor;
+    entry.label.style.stroke = { color: outlineColor, width: outlineWidth };
     entry.label.style.wordWrapWidth = Math.max(
       10,
       width - (showTextboxText ? 12 : 6),
