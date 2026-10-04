@@ -45,8 +45,8 @@ const LABEL_MIN_HEIGHT = 20;
  *
  * IMPORTANT: selecting a booth does NOT trigger this effect. The effect is
  * driven exclusively by an explicit visual filter (status or "selected").
- * Matching booths stay crisp; non-matching booths get a subtle liquid-glass
- * treatment so the map remains readable.
+ * Matching booths stay crisp; non-matching booths get a subtle frosted-glass
+ * treatment with only a small amount of blur so the map remains readable.
  */
 /**
  * Liquid-glass treatment used ONLY on booths receded by an active visual
@@ -56,15 +56,15 @@ const LABEL_MIN_HEIGHT = 20;
  * recognizable.
  */
 const FILTER_GLASS_TINT_COLOR = 0xeaf4ff;
-const FILTER_GLASS_TINT_ALPHA = 0.055;
+const FILTER_GLASS_TINT_ALPHA = 0.10;
 const FILTER_GLASS_BODY_COLOR = 0xffffff;
-const FILTER_GLASS_BODY_ALPHA = 0.025;
+const FILTER_GLASS_BODY_ALPHA = 0.045;
 const FILTER_GLASS_RIM_COLOR = 0xffffff;
-const FILTER_GLASS_RIM_ALPHA = 0.52;
-const FILTER_GLASS_INNER_RIM_ALPHA = 0.18;
+const FILTER_GLASS_RIM_ALPHA = 0.72;
+const FILTER_GLASS_INNER_RIM_ALPHA = 0.30;
 const FILTER_GLASS_DARK_RIM_COLOR = 0x8ea5bf;
-const FILTER_GLASS_DARK_RIM_ALPHA = 0.14;
-const FILTER_GLASS_SPECULAR_ALPHA = 0.42;
+const FILTER_GLASS_DARK_RIM_ALPHA = 0.22;
+const FILTER_GLASS_SPECULAR_ALPHA = 0.62;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
