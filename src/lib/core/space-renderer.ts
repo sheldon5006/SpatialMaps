@@ -75,14 +75,15 @@ const FILTER_CONTENT_BLUR = 0.9;
 /** Selected booths settle a fraction inward, like a pressed modern control. */
 const SELECTED_SCALE = 0.985;
 
-// Neumorphic locator palette: deep cast shadow + cool highlight + blue accent.
-const SEARCH_HIGHLIGHT_DARK_COLOR = 0x071426;
-const SEARCH_HIGHLIGHT_LIGHT_COLOR = 0xe8f1ff;
-const SEARCH_HIGHLIGHT_INSET_COLOR = 0x16345f;
+// Monochrome neumorphic locator: depth only — no hue, glow, or luminous accent.
+const SEARCH_HIGHLIGHT_SHADOW_COLOR = 0x111827;
+const SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR = 0x020617;
+const SEARCH_HIGHLIGHT_LIGHT_COLOR = 0xffffff;
+const SEARCH_HIGHLIGHT_INSET_COLOR = 0x334155;
 
 const HIGHLIGHT_PRESS_SPEED = 0.00072;
 const HIGHLIGHT_FOCUS_FADE_MS = 320;
-const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x3b82f6;
+const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x111827;
 
 export interface CameraSnapshot {
   x: number;
@@ -1408,18 +1409,18 @@ export class SpaceRenderer {
   }
 
   /**
-   * Draws a neumorphic pressed-control locator.
+   * Draws a monochrome neumorphic pressed-control locator.
    *
-   * There is deliberately NO glow, bloom, blur, or scanning light here.
-   * Depth comes from offset shadow planes and a restrained inset highlight,
-   * like a physical button being gently pressed into a soft surface.
+   * There is deliberately NO blue, glow, bloom, blur, or luminous scan.
+   * The interaction is communicated purely through depth: a soft cast
+   * shadow appears behind the booth, then the booth subtly sinks into it.
    */
   private drawSearchHighlight(
     highlight: Graphics,
     geometry: Space['geometry'],
     press = 0.5,
     active = true,
-    color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+    _color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
     intensity = 1,
   ): void {
     highlight.clear();
@@ -1433,64 +1434,64 @@ export class SpaceRenderer {
     const strength = Math.max(0, Math.min(1, intensity));
     const radius = Math.min(14, Math.max(5, minSide * 0.12));
 
-    // Slowly vary physical depth rather than brightness. This makes the
-    // animation read as a gentle press/release, not a pulsing light.
-    const depth = 3 + press * 4;
-    const shadowPad = 2.5 + press * 1.5;
-    const lightOffset = 1.5 + (1 - press) * 1.5;
+    // The animation changes geometry/depth, not brightness. The booth
+    // gently settles into the surface like a real pressed control.
+    const depth = 3.0 + press * 3.5;
+    const shadowSpread = 2.5 + press * 1.5;
+    const lift = 1.4 + (1 - press) * 1.4;
 
-    // Deep lower-right cast shadow.
+    // Broad cast shadow, offset down/right. This is the primary visual cue.
     highlight.roundRect(
-      depth * 0.65 - shadowPad,
-      depth - shadowPad,
-      width + shadowPad * 2,
-      height + shadowPad * 2,
-      radius + shadowPad * 0.35,
+      depth * 0.55 - shadowSpread,
+      depth - shadowSpread,
+      width + shadowSpread * 2,
+      height + shadowSpread * 2,
+      radius + shadowSpread * 0.4,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_DARK_COLOR,
-      alpha: 0.62 * strength,
+      color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
+      alpha: 0.30 * strength,
     });
 
-    // Smaller secondary shadow tight to the control edge.
-    const tightShadow = 1.8 + press * 1.8;
+    // Tighter, softer contact shadow directly under the pressed control.
+    const contact = 1.5 + press * 1.5;
     highlight.roundRect(
-      tightShadow * 0.5 - 1.2,
-      tightShadow - 1.2,
-      width + 2.4,
-      height + 2.4,
-      radius + 1,
+      contact * 0.35 - 1,
+      contact - 1,
+      width + 2,
+      height + 2,
+      radius + 0.8,
     );
     highlight.fill({
-      color: 0x0b1d36,
-      alpha: 0.44 * strength,
+      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
+      alpha: 0.34 * strength,
     });
 
-    // Soft upper-left reflected edge — the classic neumorphic counter-shadow.
+    // Very restrained upper-left relief edge. This creates the classic
+    // neumorphic light/shadow pair without making the booth look illuminated.
     highlight.roundRect(
-      -lightOffset,
-      -lightOffset,
-      width + lightOffset * 2,
-      height + lightOffset * 2,
-      radius + lightOffset * 0.5,
+      -lift,
+      -lift,
+      width + lift * 2,
+      height + lift * 2,
+      radius + lift * 0.45,
     );
     highlight.stroke({
       color: SEARCH_HIGHLIGHT_LIGHT_COLOR,
-      alpha: 0.70 * strength,
-      width: 1.6,
+      alpha: 0.34 * strength,
+      width: 1.4,
     });
 
-    // Blue pressed surface, kept transparent enough that the booth's status
-    // color and label remain readable underneath.
+    // Neutral pressed surface. It is intentionally translucent so the
+    // booth's actual status color remains completely unchanged.
     highlight.roundRect(0, 0, width, height, radius);
     highlight.fill({
-      color,
-      alpha: 0.12 * strength,
+      color: SEARCH_HIGHLIGHT_INSET_COLOR,
+      alpha: 0.05 * strength,
     });
 
-    // Inset dark plane: visually pushes the target into the map instead of
-    // making it appear to float above it.
-    const inset = 2 + press * 1.25;
+    // Inset edge: pushes the highlighted booth visually into the map.
+    const inset = 2 + press * 1.2;
     if (width > inset * 2 + 2 && height > inset * 2 + 2) {
       highlight.roundRect(
         inset,
@@ -1500,41 +1501,35 @@ export class SpaceRenderer {
         Math.max(3, radius - 2),
       );
       highlight.fill({
-        color: SEARCH_HIGHLIGHT_INSET_COLOR,
-        alpha: 0.18 * strength,
+        color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
+        alpha: 0.10 * strength,
       });
 
-      // Lower-right inner shadow.
+      // Inner lower/right shadow.
       highlight.moveTo(inset + 2, height - inset - 1);
       highlight.lineTo(width - inset - 2, height - inset - 1);
       highlight.moveTo(width - inset - 1, inset + 2);
       highlight.lineTo(width - inset - 1, height - inset - 2);
       highlight.stroke({
-        color: SEARCH_HIGHLIGHT_DARK_COLOR,
-        alpha: 0.48 * strength,
-        width: 1.5,
+        color: SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR,
+        alpha: 0.30 * strength,
+        width: 1.3,
       });
 
-      // Upper-left inset highlight completes the concave/pressed illusion.
+      // Inner upper/left highlight — the inverse edge of the same inset.
       highlight.moveTo(inset + 2, inset + 1);
       highlight.lineTo(width - inset - 3, inset + 1);
       highlight.moveTo(inset + 1, inset + 2);
       highlight.lineTo(inset + 1, height - inset - 3);
       highlight.stroke({
-        color,
-        alpha: 0.48 * strength,
-        width: 1.15,
+        color: SEARCH_HIGHLIGHT_LIGHT_COLOR,
+        alpha: 0.22 * strength,
+        width: 1.0,
       });
     }
 
-    // Minimal blue rim — not luminous, just enough to communicate the active
-    // interaction state in a data-dense map.
-    highlight.roundRect(-0.5, -0.5, width + 1, height + 1, radius);
-    highlight.stroke({
-      color,
-      alpha: 0.92 * strength,
-      width: 1.25,
-    });
+    // No bright border. The target should look physically pressed, not selected
+    // by a colored neon outline.
   }
   /** Draws a liquid-glass surface matching the receded vector geometry. */
 
