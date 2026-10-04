@@ -473,6 +473,7 @@ export class SpaceRenderer {
         visible,
         focusIntensity,
         this.highlightRopePhase,
+        isFocus ? 0xff8a00 : 0x183a5a,
       );
 
       // Keep the tiny physical press only while the one-shot transition runs.
@@ -1320,6 +1321,7 @@ export class SpaceRenderer {
       initiallyVisible,
       1,
       this.highlightRopePhase,
+      isFocusHighlighted ? 0xff8a00 : 0x183a5a,
     );
     entry.searchHighlight.visible = initiallyVisible;
     entry.pressShadow.visible = initiallyVisible;
@@ -1559,6 +1561,7 @@ export class SpaceRenderer {
     active = true,
     intensity = 1,
     ropePhase = 0,
+    primaryColor = 0x183a5a,
   ): void {
     rope.clear();
 
@@ -1690,7 +1693,7 @@ export class SpaceRenderer {
       rope.lineTo(b.x, b.y);
     }
     rope.stroke({
-      color: 0x183a5a,
+      color: primaryColor,
       alpha: 1.0 * strength,
       width: ropeWidth,
       cap: 'round',
@@ -1760,7 +1763,7 @@ export class SpaceRenderer {
       rope.moveTo(x1, y1);
       rope.lineTo(x2, y2);
       rope.stroke({
-        color: index % 2 === 0 ? 0x183a5a : 0xd5d9de,
+        color: index % 2 === 0 ? primaryColor : 0xd5d9de,
         alpha: 1.0 * strength,
         width: Math.max(2.1, ropeWidth * 0.70),
         cap: 'round',
