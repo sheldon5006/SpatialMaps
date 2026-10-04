@@ -1487,7 +1487,7 @@ export class SpaceRenderer {
       radius + spread * 0.35,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
       alpha: (0.12 + press * 0.18) * strength,
     });
 
@@ -1502,7 +1502,7 @@ export class SpaceRenderer {
       radius + soft * 0.25,
     );
     highlight.fill({
-      color: SEARCH_HIGHLIGHT_DARK_COLOR,
+      color: SEARCH_HIGHLIGHT_SHADOW_COLOR,
       alpha: (0.05 + press * 0.07) * strength,
     });
 
