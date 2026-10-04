@@ -236,11 +236,16 @@ export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
   // 30 bookable booths
   // ------------------------------------------------------------------------
-  ...boothStrip(
-    'booth',
-    ['Art Corner','Honey','Handmade','Vintage','Pottery','Jewelry','Candles','Bakery','Textiles','Gifts'],
-    214, 245, 92, 48, 8, 0,
-  ),
+  booth('A101', 'Art Corner', 214, 245, 92, 48, 'available'),
+  booth('A102', 'Honey', 314, 245, 92, 48, 'reserved'),
+  booth('A103', 'Handmade', 414, 245, 92, 48, 'available'),
+  booth('A104', 'Vintage', 514, 245, 92, 48, 'booked'),
+  booth('A105', 'Pottery', 614, 245, 92, 48, 'available'),
+  booth('A106', 'Jewelry', 714, 245, 92, 48, 'reserved', 5),
+  booth('top-07', 'Candles', 814, 245, 92, 48, 'available'),
+  booth('top-08', 'Bakery', 914, 245, 92, 48, 'reserved'),
+  booth('top-09', 'Textiles', 1014, 245, 92, 48, 'maintenance'),
+  booth('top-10', 'Gifts', 1114, 245, 92, 48, 'available'),
 
   ...boothStrip(
     'west',
@@ -259,9 +264,6 @@ export const TEST_SPACES: Space[] = [
     ['Toys','Books','Pets','Clothing','Accessories','Ceramics','Prints','Crafts','Home Decor','Local Goods'],
     390, 736, 90, 44, 8, 0,
   ),
-
-  // Keep the rotated interaction fixture, but place it in a real booth row.
-  booth('A106', 'Jewelry', 818, 245, 92, 48, 'reserved', 5),
 
   // ------------------------------------------------------------------------
   // Amenities / infrastructure
