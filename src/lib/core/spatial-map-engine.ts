@@ -355,19 +355,72 @@ export class SpatialMapEngine {
     }
   }
 
+  /** Adds one space. If `id` already exists, replaces it (with a dev warning — likely a caller bug). */
+  addSpace(space: Space): void {
+    if (!this.world) {
+      throw new Error('SpatialMapEngine.addSpace called before init()');
+    }
+
+    if (this.spaceData.has(space.id)) {
+      console.warn(
+        `SpatialMapEngine.addSpace: a space with id "${space.id}" already exists and will be replaced. Use updateSpace() if that was intentional.`,
+      );
+      this.removeSpace(space.id);
+    }
+
+    this.spaceData.set(space.id, space);
+    const graphic = this.createSpaceGraphic(space);
+    this.spaceGraphics.set(space.id, graphic);
+    this.world.addChild(graphic);
+  }
+
+  /** Merges `patch` into an existing space's geometry/properties and repaints/repositions it. */
+  updateSpace(id: string, patch: { geometry?: Partial<Space['geometry']>; properties?: Partial<Space['properties']> }): void {
+    const existing = this.spaceData.get(id);
+    const graphic = this.spaceGraphics.get(id);
+    if (!existing || !graphic) {
+      console.warn(`SpatialMapEngine.updateSpace: no space with id "${id}" is loaded.`);
+      return;
+    }
+
+    const merged: Space = {
+      ...existing,
+      geometry: { ...existing.geometry, ...patch.geometry },
+      properties: { ...existing.properties, ...patch.properties },
+    };
+    this.spaceData.set(id, merged);
+
+    this.paintSpace(graphic, merged);
+    this.applyGeometry(graphic, merged.geometry);
+  }
+
+  /** Removes one space. Clears it from hover/selection state if applicable. */
+  removeSpace(id: string): void {
+    const graphic = this.spaceGraphics.get(id);
+    if (!graphic || !this.world) {
+      console.warn(`SpatialMapEngine.removeSpace: no space with id "${id}" is loaded.`);
+      return;
+    }
+
+    this.world.removeChild(graphic);
+    graphic.destroy();
+    this.spaceGraphics.delete(id);
+    this.spaceData.delete(id);
+
+    if (this.hoveredId === id) {
+      this.hoveredId = null;
+      this.emitter.emit('hover', null);
+    }
+    if (this.selectedIds.delete(id)) {
+      this.emitter.emit('select', Array.from(this.selectedIds));
+    }
+  }
+
   private createSpaceGraphic(space: Space): Graphics {
     const graphic = new Graphics();
     this.paintSpace(graphic, space);
+    this.applyGeometry(graphic, space.geometry);
 
-    const { geometry } = space;
-    // Position by center + pivot so rotation (when present) is around the
-    // rectangle's own center rather than its top-left corner.
-    graphic.pivot.set(geometry.width / 2, geometry.height / 2);
-    graphic.position.set(
-      geometry.x + geometry.width / 2,
-      geometry.y + geometry.height / 2,
-    );
-    graphic.rotation = ((geometry.rotation ?? 0) * Math.PI) / 180;
     graphic.eventMode = 'static';
     graphic.cursor = 'pointer';
     graphic.label = space.id;
@@ -377,6 +430,15 @@ export class SpatialMapEngine {
     graphic.on('pointertap', () => this.selectSpace(space.id, !this.selectedIds.has(space.id)));
 
     return graphic;
+  }
+
+  /** Positions/rotates a graphic from its geometry. Shared by create and updateSpace. */
+  private applyGeometry(graphic: Graphics, geometry: Space['geometry']): void {
+    // Position by center + pivot so rotation (when present) is around the
+    // rectangle's own center rather than its top-left corner.
+    graphic.pivot.set(geometry.width / 2, geometry.height / 2);
+    graphic.position.set(geometry.x + geometry.width / 2, geometry.y + geometry.height / 2);
+    graphic.rotation = ((geometry.rotation ?? 0) * Math.PI) / 180;
   }
 
   /** Redraws one space's fill/stroke using its current status + hover/selection state. */

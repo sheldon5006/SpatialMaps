@@ -53,6 +53,14 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
         <button (click)="onResetFixture()">Reset</button>
         <span #fpsReadout class="fps-readout">—</span>
       </div>
+      <!-- Dev harness for Step 1.9 — exercises the incremental data API
+           (addSpace/updateSpace/removeSpace) against the live fixture. -->
+      <div class="dev-data-controls">
+        <button (click)="onAddSpace()">Add space</button>
+        <button (click)="onToggleA101Status()">Toggle A101 status</button>
+        <button (click)="onMoveA101()">Move A101</button>
+        <button (click)="onRemoveA105()">Remove A105</button>
+      </div>
     </div>
   `,
   styles: [
@@ -137,6 +145,28 @@ const BENCH_SIZES = [100, 1000, 5000, 10000, 50000] as const;
         font: 12px/1 ui-monospace, 'SF Mono', Consolas, monospace;
         min-width: 11ch;
       }
+
+      .dev-data-controls {
+        position: absolute;
+        top: 48px;
+        right: 12px;
+        display: flex;
+        gap: 6px;
+      }
+
+      .dev-data-controls button {
+        padding: 6px 10px;
+        border-radius: 6px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background: rgba(20, 22, 28, 0.75);
+        color: #e8eaf0;
+        font: 12px -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        cursor: pointer;
+      }
+
+      .dev-data-controls button:hover {
+        background: rgba(20, 22, 28, 0.9);
+      }
     `,
   ],
 })
@@ -199,5 +229,31 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected onResetFixture(): void {
     this.engine.loadSpaces(TEST_SPACES);
     this.engine.camera.fitBounds(undefined, { duration: 0 });
+  }
+
+  protected onAddSpace(): void {
+    this.engine.addSpace({
+      id: `extra-${Date.now()}`,
+      type: 'booth',
+      geometry: { type: 'rectangle', x: 320, y: 0, width: 80, height: 60 },
+      properties: { name: 'New space', status: 'available' },
+    });
+  }
+
+  private a101Booked = false;
+
+  protected onToggleA101Status(): void {
+    this.a101Booked = !this.a101Booked;
+    this.engine.updateSpace('A101', {
+      properties: { status: this.a101Booked ? 'booked' : 'available' },
+    });
+  }
+
+  protected onMoveA101(): void {
+    this.engine.updateSpace('A101', { geometry: { y: Math.random() * 150 } });
+  }
+
+  protected onRemoveA105(): void {
+    this.engine.removeSpace('A105');
   }
 }
