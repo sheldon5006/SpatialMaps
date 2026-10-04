@@ -261,10 +261,14 @@ export class SpatialMapEngine {
     if (settings.theme) this.setTheme(settings.theme);
 
     if (settings.grid) {
-      this.gridEnabled = settings.grid.enabled;
-      this.gridSize = Math.max(10, Math.min(500, Math.round(settings.grid.size)));
-      this.renderer?.setGridEnabled(this.gridEnabled);
-      this.renderer?.setGridSize(this.gridSize);
+      if (settings.grid.enabled !== undefined) {
+        this.gridEnabled = settings.grid.enabled;
+        this.renderer?.setGridEnabled(this.gridEnabled);
+      }
+      if (settings.grid.size !== undefined) {
+        this.gridSize = Math.max(10, Math.min(500, Math.round(settings.grid.size)));
+        this.renderer?.setGridSize(this.gridSize);
+      }
     }
   }
 
