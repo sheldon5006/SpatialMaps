@@ -405,26 +405,53 @@ export class SpaceRenderer {
   }
 
   /**
-   * Toggles a space's selection state. Selection is multi-select by
-   * default. Selecting (not deselecting) a space the current
-   * SelectionRule rejects is a no-op — status/business rules are the only
-   * thing allowed to gate this, and the UI must respect them exactly.
+   * Toggles a space's selection state.
+   *
+   * View mode:
+   *   - multi-select is allowed
+   *   - the real SelectionRule gates selection
+   *
+   * Edit mode:
+   *   - any booth may be selected, regardless of status
+   *   - exactly ONE booth may be selected at a time
+   *
+   * This keeps editor interactions deterministic while preserving the
+   * public/view multi-selection behaviour.
    */
   selectSpace(id: string, selected: boolean): void {
-    if (selected === this.selectedIds.has(id)) return;
-    if (selected) {
-      const space = this.spaceData.get(id);
-      if (!space) return;
+    const alreadySelected = this.selectedIds.has(id);
+    if (selected === alreadySelected) return;
 
-      // Editor users must be able to select any booth, regardless of
-      // availability/reservation status. The business selection rule is
-      // enforced only in view mode.
-      if (this.mode !== 'edit' && !this.isSelectable(space)) return;
-
-      this.selectedIds.add(id);
-    } else {
+    if (!selected) {
       this.selectedIds.delete(id);
+      this.repaint(id);
+      this.updateFocusEffect();
+      this.events.emit('select', Array.from(this.selectedIds));
+      return;
     }
+
+    const space = this.spaceData.get(id);
+    if (!space) return;
+
+    // Editor users can select any booth, regardless of business status.
+    if (this.mode === 'edit') {
+      const previouslySelected = Array.from(this.selectedIds).filter((selectedId) => selectedId !== id);
+      this.selectedIds.clear();
+      this.selectedIds.add(id);
+
+      // Repaint the old selection so its selection ring/badge disappears.
+      previouslySelected.forEach((selectedId) => this.repaint(selectedId));
+      this.repaint(id);
+      this.updateFocusEffect();
+      this.events.emit('select', Array.from(this.selectedIds));
+      return;
+    }
+
+    // View mode keeps the real business-selection rule and supports
+    // multiple selected booths.
+    if (!this.isSelectable(space)) return;
+
+    this.selectedIds.add(id);
     this.repaint(id);
     this.updateFocusEffect();
     this.events.emit('select', Array.from(this.selectedIds));
