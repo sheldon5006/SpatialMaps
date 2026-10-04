@@ -4,64 +4,69 @@ const svgDataUrl = (svg: string): string =>
   `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 
 /**
- * Clean, browse-first outdoor market fixture.
+ * Simplified 2D outdoor market test map.
+ *
+ * Built in the same order a real map is authored:
+ * 1. ground
+ * 2. roads and paths
+ * 3. landscaped districts
+ * 4. bookable booths
+ * 5. essential amenities / infrastructure
+ * 6. entries / exits
+ * 7. lightweight labels
+ *
+ * The map intentionally has no full-map illustration, no logo card and no
+ * legend card. The visual system itself carries the information.
  *
  * Artboard: 1400 x 900 map-space pixels.
- * Exactly 30 bookable booths, two parking areas, four restrooms, six trees,
- * three infrastructure buildings, four entry/exit points, roads, landscape,
- * paths, a food court, a stage, information/first aid and a compact legend.
- *
- * The scene is intentionally composed from the application's own primitives
- * instead of using a single full-map background image.
  */
 
-const logoImage = (): string => svgDataUrl(`
-<svg xmlns="http://www.w3.org/2000/svg" width="460" height="150" viewBox="0 0 460 150">
-  <rect width="460" height="150" rx="28" fill="#fffdf8" stroke="#c5bdab" stroke-width="3"/>
-  <path d="M54 52 C96 15 141 15 174 50 C214 12 271 12 308 50" fill="none" stroke="#2d7d42" stroke-width="7" stroke-linecap="round"/>
-  <circle cx="175" cy="37" r="17" fill="#df654a"/>
-  <text x="229" y="78" text-anchor="middle" font-family="Georgia,serif" font-size="30" font-weight="700" fill="#9c5c36">Riverside</text>
-  <text x="230" y="112" text-anchor="middle" font-family="Georgia,serif" font-size="34" font-weight="800" fill="#2d7d42">Outdoor Market</text>
-  <text x="230" y="135" text-anchor="middle" font-family="Arial" font-size="11" font-weight="700" letter-spacing="3" fill="#6f756c">SHOP • EAT • EXPLORE</text>
-</svg>`);
-
 const iconImage = (
-  kind: 'parking' | 'restroom' | 'info' | 'firstaid' | 'stage' | 'tree' | 'entrance' | 'food' | 'atm',
+  kind:
+    | 'parking'
+    | 'restroom'
+    | 'info'
+    | 'firstaid'
+    | 'stage'
+    | 'entrance'
+    | 'food'
+    | 'atm',
 ): string => {
   const body = {
     parking: `
-      <text x="36" y="51" text-anchor="middle" font-family="Arial" font-size="43" font-weight="900" fill="#176fae">P</text>`,
+      <text x="36" y="51" text-anchor="middle"
+        font-family="Arial" font-size="42" font-weight="900" fill="#176fae">P</text>`,
     restroom: `
-      <circle cx="36" cy="36" r="23" fill="#399574"/>
-      <circle cx="28" cy="27" r="4" fill="#fff"/><circle cx="44" cy="27" r="4" fill="#fff"/>
-      <path d="M28 33 V50 M44 33 V50 M28 40 H44" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
+      <circle cx="36" cy="36" r="23" fill="#2f8f70"/>
+      <circle cx="28" cy="27" r="4" fill="#fff"/>
+      <circle cx="44" cy="27" r="4" fill="#fff"/>
+      <path d="M28 33 V50 M44 33 V50 M28 40 H44"
+        stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
     info: `
-      <circle cx="36" cy="36" r="22" fill="#2b79ad"/>
-      <text x="36" y="49" text-anchor="middle" font-family="Georgia" font-size="40" font-weight="700" fill="#fff">i</text>`,
+      <circle cx="36" cy="36" r="22" fill="#2877aa"/>
+      <text x="36" y="49" text-anchor="middle"
+        font-family="Georgia" font-size="40" font-weight="700" fill="#fff">i</text>`,
     firstaid: `
-      <circle cx="36" cy="36" r="22" fill="#d95357"/>
+      <circle cx="36" cy="36" r="22" fill="#d64f55"/>
       <rect x="30" y="21" width="12" height="30" rx="3" fill="#fff"/>
       <rect x="21" y="30" width="30" height="12" rx="3" fill="#fff"/>`,
     stage: `
-      <rect x="13" y="17" width="46" height="38" rx="8" fill="#303f49"/>
-      <path d="M19 48 L29 36 L37 43 L46 29 L57 48 Z" fill="#e6b75d"/>
+      <rect x="13" y="17" width="46" height="38" rx="8" fill="#34434b"/>
+      <path d="M19 48 L29 36 L37 43 L46 29 L57 48 Z" fill="#e4b45f"/>
       <path d="M23 55 H49" stroke="#fff" stroke-width="3" stroke-linecap="round"/>`,
-    tree: `
-      <rect x="32" y="40" width="8" height="17" rx="3" fill="#80512d"/>
-      <circle cx="36" cy="32" r="21" fill="#2e7f3f"/>
-      <circle cx="24" cy="37" r="13" fill="#4c9945"/>
-      <circle cx="48" cy="38" r="13" fill="#57a64f"/>
-      <circle cx="35" cy="21" r="12" fill="#63ae56"/>`,
     entrance: `
-      <path d="M9 49 L36 12 L63 49 Z" fill="#2f8a58"/>
-      <path d="M22 43 H50 M36 28 V43 M29 35 H43" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
+      <path d="M9 49 L36 12 L63 49 Z" fill="#2e8b5c"/>
+      <path d="M22 43 H50 M36 28 V43 M29 35 H43"
+        stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
     food: `
-      <circle cx="36" cy="36" r="22" fill="#ef8b4d"/>
-      <path d="M25 22 V50 M25 22 Q35 26 25 31 M47 23 V48" stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
+      <circle cx="36" cy="36" r="22" fill="#ed8b4d"/>
+      <path d="M25 22 V50 M25 22 Q35 26 25 31 M47 23 V48"
+        stroke="#fff" stroke-width="4" stroke-linecap="round"/>`,
     atm: `
-      <rect x="11" y="12" width="50" height="48" rx="8" fill="#55a54e"/>
+      <rect x="11" y="12" width="50" height="48" rx="8" fill="#56a64f"/>
       <rect x="20" y="20" width="32" height="16" rx="3" fill="#edf7e9"/>
-      <text x="36" y="51" text-anchor="middle" font-family="Arial" font-size="12" font-weight="900" fill="#fff">ATM</text>`,
+      <text x="36" y="51" text-anchor="middle"
+        font-family="Arial" font-size="12" font-weight="900" fill="#fff">ATM</text>`,
   }[kind];
 
   return svgDataUrl(`
@@ -71,30 +76,13 @@ const iconImage = (
 </svg>`);
 };
 
-const legendImage = (): string => svgDataUrl(`
-<svg xmlns="http://www.w3.org/2000/svg" width="420" height="250" viewBox="0 0 420 250">
-  <rect width="420" height="250" rx="22" fill="#fffdf8" stroke="#bdb5a8" stroke-width="3"/>
-  <text x="22" y="35" font-family="Georgia" font-size="24" font-weight="700" fill="#2d7d56">Market Guide</text>
-  <text x="22" y="58" font-family="Arial" font-size="10" font-weight="700" fill="#7b7e78">DISTRICTS</text>
-  <circle cx="30" cy="84" r="9" fill="#e8b17b"/><text x="48" y="89" font-family="Arial" font-size="13" fill="#4f5559">North Bazaar</text>
-  <circle cx="30" cy="110" r="9" fill="#9ccc85"/><text x="48" y="115" font-family="Arial" font-size="13" fill="#4f5559">Garden Market</text>
-  <circle cx="30" cy="136" r="9" fill="#9dc9e8"/><text x="48" y="141" font-family="Arial" font-size="13" fill="#4f5559">Riverside Row</text>
-  <circle cx="30" cy="162" r="9" fill="#f2d59f"/><text x="48" y="167" font-family="Arial" font-size="13" fill="#4f5559">Food Court</text>
-  <line x1="220" y1="70" x2="220" y2="220" stroke="#ddd6cb" stroke-width="2"/>
-  <text x="240" y="90" font-family="Arial" font-size="10" font-weight="700" fill="#7b7e78">AMENITIES</text>
-  <circle cx="254" cy="116" r="10" fill="#176fae"/><text x="248" y="121" font-family="Arial" font-size="12" font-weight="900" fill="#fff">P</text><text x="274" y="121" font-family="Arial" font-size="13" fill="#4f5559">Parking</text>
-  <circle cx="254" cy="145" r="10" fill="#399574"/><text x="246" y="150" font-family="Arial" font-size="9" font-weight="900" fill="#fff">WC</text><text x="274" y="150" font-family="Arial" font-size="13" fill="#4f5559">Restrooms</text>
-  <circle cx="254" cy="174" r="10" fill="#2b79ad"/><text x="250" y="180" font-family="Arial" font-size="14" font-weight="900" fill="#fff">i</text><text x="274" y="179" font-family="Arial" font-size="13" fill="#4f5559">Information</text>
-  <circle cx="254" cy="203" r="10" fill="#d95357"/><text x="250" y="209" font-family="Arial" font-size="13" font-weight="900" fill="#fff">+</text><text x="274" y="208" font-family="Arial" font-size="13" fill="#4f5559">First aid</text>
-</svg>`);
-
 const booth = (
   id: string,
   name: string,
   x: number,
   y: number,
-  width = 90,
-  height = 48,
+  width = 94,
+  height = 50,
   status: SpaceStatus = 'available',
   rotation?: number,
 ): Space => ({
@@ -165,15 +153,15 @@ const textbox = (
   properties: { name: text },
 });
 
-const boothStrip = (
+const boothRow = (
   prefix: string,
   names: string[],
-  x: number,
+  startX: number,
   y: number,
-  width = 90,
-  height = 48,
-  gap = 9,
-  offset = 0,
+  width = 94,
+  height = 50,
+  gap = 10,
+  statusOffset = 0,
 ): Space[] => {
   const statuses: SpaceStatus[] = [
     'available',
@@ -182,148 +170,192 @@ const boothStrip = (
     'booked',
     'available',
     'reserved',
-    'maintenance',
-    'available',
   ];
 
   return names.map((name, index) =>
     booth(
       `${prefix}-${String(index + 1).padStart(2, '0')}`,
       name,
-      x + index * (width + gap),
+      startX + index * (width + gap),
       y,
       width,
       height,
-      statuses[(index + offset) % statuses.length],
+      statuses[(index + statusOffset) % statuses.length],
     ),
   );
 };
 
 export const TEST_SPACES: Space[] = [
   // ------------------------------------------------------------------------
-  // Ground / roads / parking / districts
+  // 1. Ground
   // ------------------------------------------------------------------------
-  prop('ground', 'Market Ground', 0, 0, 1400, 900, '#f4f1e8', 'rectangle'),
-
-  // Perimeter road
-  prop('road-north', 'North Road', 0, 18, 1400, 66, '#bdbfc0', 'rounded-rectangle'),
-  prop('road-south', 'South Road', 0, 816, 1400, 66, '#bdbfc0', 'rounded-rectangle'),
-  prop('road-west', 'West Road', 18, 70, 68, 764, '#bdbfc0', 'rounded-rectangle'),
-  prop('road-east', 'East Road', 1314, 70, 68, 764, '#bdbfc0', 'rounded-rectangle'),
-  prop('road-cross', 'Market Crossroad', 70, 430, 1244, 74, '#c5c6c4', 'rounded-rectangle'),
-  prop('road-center', 'Central Path', 654, 84, 92, 732, '#d0cfca', 'rounded-rectangle'),
-
-  // Parking areas
-  prop('parking-north', 'North Parking', 420, 96, 560, 112, '#55585b', 'rounded-rectangle'),
-  prop('parking-southwest', 'South West Parking', 92, 694, 250, 116, '#55585b', 'rounded-rectangle'),
-
-  // District cards
-  prop('district-north-west', 'North Bazaar', 250, 108, 322, 120, '#f0bf8d', 'rounded-rectangle'),
-  prop('district-north-east', 'Garden Market', 790, 108, 322, 120, '#c7dfaa', 'rounded-rectangle'),
-  prop('district-west', 'Food Court', 164, 520, 420, 128, '#f0dda7', 'rounded-rectangle'),
-  prop('district-east', 'Riverside Row', 796, 520, 420, 128, '#b9d8ec', 'rounded-rectangle'),
-  prop('district-south-left', 'Craft Walk', 386, 690, 350, 112, '#bddbc5', 'rounded-rectangle'),
-  prop('district-south-right', 'Family Market', 784, 690, 348, 112, '#efc4a4', 'rounded-rectangle'),
-
-  // Central landscaped plaza
-  prop('plaza-lawn', 'Market Green', 390, 250, 620, 260, '#d6e8cf', 'ellipse'),
-  prop('fountain', 'Fountain', 650, 330, 100, 70, '#6fb9cb', 'ellipse', true),
-
-  // Food court tent + live stage
-  prop('food-tent', 'Food Court Tent', 214, 538, 150, 90, '#e9dcc6', 'triangle'),
-  prop('stage', 'Live Stage', 1012, 548, 160, 94, '#34434a', 'rounded-rectangle'),
+  prop('ground', 'Market Ground', 0, 0, 1400, 900, '#f1eee5', 'rectangle'),
 
   // ------------------------------------------------------------------------
-  // 30 bookable booths
+  // 2. Roads and pedestrian routes
   // ------------------------------------------------------------------------
-  booth('A101', 'Art Corner', 214, 245, 92, 48, 'available'),
-  booth('A102', 'Honey', 314, 245, 92, 48, 'reserved'),
-  booth('A103', 'Handmade', 414, 245, 92, 48, 'available'),
-  booth('A104', 'Vintage', 514, 245, 92, 48, 'booked'),
-  booth('A105', 'Pottery', 614, 245, 92, 48, 'available'),
-  booth('A106', 'Jewelry', 714, 245, 92, 48, 'reserved', 5),
-  booth('top-07', 'Candles', 814, 245, 92, 48, 'available'),
-  booth('top-08', 'Bakery', 914, 245, 92, 48, 'reserved'),
-  booth('top-09', 'Textiles', 1014, 245, 92, 48, 'maintenance'),
-  booth('top-10', 'Gifts', 1114, 245, 92, 48, 'available'),
+  prop('road-top', 'North Road', 0, 20, 1400, 70, '#bfc1bf', 'rounded-rectangle'),
+  prop('road-bottom', 'South Road', 0, 810, 1400, 70, '#bfc1bf', 'rounded-rectangle'),
+  prop('road-left', 'West Road', 20, 70, 72, 740, '#bfc1bf', 'rounded-rectangle'),
+  prop('road-right', 'East Road', 1308, 70, 72, 740, '#bfc1bf', 'rounded-rectangle'),
+  prop('road-main', 'Main Market Road', 92, 438, 1216, 70, '#c6c8c5', 'rounded-rectangle'),
+  prop('path-center', 'Central Walk', 648, 92, 104, 718, '#d8d5ce', 'rounded-rectangle'),
 
-  ...boothStrip(
-    'west',
-    ['Coffee','Tacos','Ice Cream','BBQ','Lemonade'],
-    214, 548, 72, 44, 8, 1,
+  // Small pedestrian plazas.
+  prop('plaza-north', 'North Plaza', 350, 270, 700, 84, '#ddd9d0', 'rounded-rectangle'),
+  prop('plaza-south', 'South Plaza', 350, 560, 700, 84, '#ddd9d0', 'rounded-rectangle'),
+
+  // ------------------------------------------------------------------------
+  // 3. Landscape and district surfaces
+  // ------------------------------------------------------------------------
+  prop('north-west-district', 'North Bazaar', 210, 120, 470, 130, '#f2c89f', 'rounded-rectangle'),
+  prop('north-east-district', 'Garden Market', 720, 120, 470, 130, '#cfe2b5', 'rounded-rectangle'),
+
+  prop('west-food-district', 'Food Court', 150, 545, 390, 126, '#f0ddb0', 'rounded-rectangle'),
+  prop('east-market-district', 'Riverside Row', 860, 545, 390, 126, '#bcd9ed', 'rounded-rectangle'),
+
+  prop('south-left-district', 'Craft Walk', 320, 684, 380, 96, '#c3dec9', 'rounded-rectangle'),
+  prop('south-right-district', 'Family Market', 760, 684, 330, 96, '#efc6a5', 'rounded-rectangle'),
+
+  // Central green + small fountain.
+  prop('central-green', 'Market Green', 370, 350, 660, 170, '#d8ebd0', 'ellipse'),
+  prop('fountain', 'Fountain', 644, 395, 112, 80, '#71b9ca', 'ellipse', true),
+
+  // Essential landscape accents.
+  prop('flower-bed-1', 'Flower Bed', 388, 370, 86, 18, '#82ac72', 'rounded-rectangle'),
+  prop('flower-bed-2', 'Flower Bed', 926, 370, 86, 18, '#82ac72', 'rounded-rectangle'),
+  prop('flower-bed-3', 'Flower Bed', 420, 512, 88, 18, '#82ac72', 'rounded-rectangle'),
+  prop('flower-bed-4', 'Flower Bed', 876, 512, 88, 18, '#82ac72', 'rounded-rectangle'),
+
+  // ------------------------------------------------------------------------
+  // 4. Exactly 30 bookable booths — deliberately separated, no overlap.
+  // ------------------------------------------------------------------------
+
+  // North Bazaar — 10
+  ...boothRow(
+    'north',
+    ['Art Corner', 'Honey', 'Handmade', 'Vintage', 'Pottery'],
+    232,
+    155,
+    78,
+    50,
+    10,
+    0,
+  ),
+  ...boothRow(
+    'north-b',
+    ['Jewelry', 'Candles', 'Bakery', 'Textiles', 'Gifts'],
+    232,
+    215,
+    78,
+    50,
+    10,
+    2,
   ),
 
-  ...boothStrip(
-    'east',
-    ['Plants','Herbs','Flowers','Garden','Succulents'],
-    820, 548, 72, 44, 8, 2,
+  // Food Court — 5
+  ...boothRow(
+    'food',
+    ['Coffee', 'Tacos', 'Ice Cream', 'BBQ', 'Fresh Juice'],
+    166,
+    585,
+    68,
+    44,
+    9,
+    1,
   ),
 
-  ...boothStrip(
-    'bottom',
-    ['Toys','Books','Pets','Clothing','Accessories','Ceramics','Prints','Crafts','Home Decor','Local Goods'],
-    390, 736, 90, 44, 8, 0,
+  // Riverside Row — 5
+  ...boothRow(
+    'river',
+    ['Plants', 'Herbs', 'Flowers', 'Garden Tools', 'Succulents'],
+    876,
+    585,
+    68,
+    44,
+    9,
+    2,
+  ),
+
+  // South craft/family strip — 10
+  ...boothRow(
+    'south',
+    ['Toys', 'Books', 'Pets', 'Clothing', 'Accessories'],
+    338,
+    706,
+    64,
+    44,
+    9,
+    0,
+  ),
+  ...boothRow(
+    'south-b',
+    ['Ceramics', 'Prints', 'Crafts', 'Home Decor', 'Local Goods'],
+    788,
+    706,
+    64,
+    44,
+    9,
+    1,
   ),
 
   // ------------------------------------------------------------------------
-  // Amenities / infrastructure
+  // 5. Essential amenity / infrastructure icons
   // ------------------------------------------------------------------------
-  imageProp('restroom-1', 'Restroom North', 590, 266, 58, 58, iconImage('restroom')),
-  imageProp('restroom-2', 'Restroom West', 392, 426, 58, 58, iconImage('restroom')),
-  imageProp('restroom-3', 'Restroom East', 950, 426, 58, 58, iconImage('restroom')),
-  imageProp('restroom-4', 'Restroom South', 692, 668, 58, 58, iconImage('restroom')),
 
-  imageProp('parking-icon-1', 'Parking', 454, 118, 58, 58, iconImage('parking')),
-  imageProp('parking-icon-2', 'Parking', 132, 722, 58, 58, iconImage('parking')),
+  // Exactly 4 toilets.
+  imageProp('restroom-1', 'Restroom North West', 360, 275, 56, 56, iconImage('restroom')),
+  imageProp('restroom-2', 'Restroom North East', 984, 275, 56, 56, iconImage('restroom')),
+  imageProp('restroom-3', 'Restroom South West', 560, 585, 56, 56, iconImage('restroom')),
+  imageProp('restroom-4', 'Restroom South East', 760, 585, 56, 56, iconImage('restroom')),
 
-  imageProp('infrastructure-stage', 'Live Stage', 1056, 566, 56, 56, iconImage('stage')),
-  imageProp('infrastructure-info', 'Information', 1056, 680, 56, 56, iconImage('info')),
-  imageProp('infrastructure-firstaid', 'First Aid', 1132, 680, 56, 56, iconImage('firstaid')),
+  // Exactly 2 parking areas.
+  prop('parking-north', 'North Parking', 410, 34, 580, 74, '#55585b', 'rounded-rectangle'),
+  prop('parking-south', 'South Parking', 108, 714, 184, 88, '#55585b', 'rounded-rectangle'),
+  imageProp('parking-icon-1', 'North Parking', 682, 42, 52, 52, iconImage('parking')),
+  imageProp('parking-icon-2', 'South Parking', 174, 730, 52, 52, iconImage('parking')),
 
-  // ------------------------------------------------------------------------
-  // Six trees / landscape features
-  // ------------------------------------------------------------------------
-  imageProp('tree-1', 'Tree', 402, 284, 58, 58, iconImage('tree')),
-  imageProp('tree-2', 'Tree', 500, 272, 58, 58, iconImage('tree')),
-  imageProp('tree-3', 'Tree', 844, 286, 58, 58, iconImage('tree')),
-  imageProp('tree-4', 'Tree', 944, 276, 58, 58, iconImage('tree')),
-  imageProp('tree-5', 'Tree', 464, 612, 58, 58, iconImage('tree')),
-  imageProp('tree-6', 'Tree', 866, 612, 58, 58, iconImage('tree')),
+  // 3 infrastructure elements.
+  prop('stage', 'Live Stage', 1084, 330, 168, 108, '#37454d', 'rounded-rectangle'),
+  imageProp('stage-icon', 'Live Stage', 1138, 344, 56, 56, iconImage('stage')),
+  prop('info-booth', 'Information Booth', 1086, 452, 154, 70, '#d9d0b8', 'rounded-rectangle'),
+  imageProp('info-icon', 'Information', 1136, 458, 52, 52, iconImage('info')),
+  prop('first-aid', 'First Aid', 1200, 675, 108, 70, '#ead2d1', 'rounded-rectangle'),
+  imageProp('first-aid-icon', 'First Aid', 1230, 682, 52, 52, iconImage('firstaid')),
 
-  // Small landscape shapes
-  prop('garden-bed-1', 'Flower Bed', 372, 308, 88, 18, '#7fb071', 'rounded-rectangle'),
-  prop('garden-bed-2', 'Flower Bed', 940, 308, 88, 18, '#7fb071', 'rounded-rectangle'),
-  prop('garden-bed-3', 'Flower Bed', 548, 642, 90, 18, '#7fb071', 'rounded-rectangle'),
-  prop('garden-bed-4', 'Flower Bed', 790, 642, 90, 18, '#7fb071', 'rounded-rectangle'),
+  // Food sign/icon only where useful.
+  imageProp('food-icon', 'Food & Drinks', 168, 520, 52, 52, iconImage('food')),
+  imageProp('atm-icon', 'ATM', 1160, 525, 52, 52, iconImage('atm')),
 
   // ------------------------------------------------------------------------
-  // Four entry/exit points
+  // 6. Exactly 6 trees
   // ------------------------------------------------------------------------
-  imageProp('north-entry', 'North Entry', 622, 88, 60, 60, iconImage('entrance')),
-  imageProp('west-exit', 'West Exit', 86, 400, 60, 60, iconImage('entrance')),
-  imageProp('east-exit', 'East Exit', 1250, 400, 60, 60, iconImage('entrance')),
-  imageProp('south-entry', 'South Entry', 622, 772, 60, 60, iconImage('entrance')),
+  imageProp('tree-1', 'Tree', 306, 318, 54, 54, iconImage('stage')),
+  imageProp('tree-2', 'Tree', 1020, 318, 54, 54, iconImage('stage')),
+  imageProp('tree-3', 'Tree', 300, 500, 54, 54, iconImage('stage')),
+  imageProp('tree-4', 'Tree', 1060, 500, 54, 54, iconImage('stage')),
+  imageProp('tree-5', 'Tree', 470, 650, 54, 54, iconImage('stage')),
+  imageProp('tree-6', 'Tree', 900, 650, 54, 54, iconImage('stage')),
 
   // ------------------------------------------------------------------------
-  // Branding / labels
+  // 7. Four entry / exit points
   // ------------------------------------------------------------------------
-  imageProp('market-logo', 'Riverside Outdoor Market', 28, 18, 250, 76, logoImage()),
-  textbox('north-title', 'NORTH BAZAAR', 308, 112, 198, 28),
-  textbox('garden-title', 'GARDEN MARKET', 834, 112, 238, 28),
-  textbox('food-title', 'FOOD COURT', 280, 528, 190, 28),
-  textbox('river-title', 'RIVERSIDE ROW', 876, 528, 210, 28),
-  textbox('craft-title', 'CRAFT WALK', 478, 694, 180, 28),
-  textbox('family-title', 'FAMILY MARKET', 864, 694, 210, 28),
-  textbox('north-entry-label', 'NORTH ENTRY', 586, 54, 186, 26),
-  textbox('west-exit-label', 'WEST EXIT', 70, 374, 150, 26),
-  textbox('east-exit-label', 'EAST EXIT', 1190, 374, 150, 26),
-  textbox('south-entry-label', 'SOUTH ENTRY', 580, 846, 206, 26),
-  textbox('parking-north-label', 'NORTH PARKING', 594, 150, 220, 28),
-  textbox('parking-south-label', 'SOUTH-WEST PARKING', 92, 790, 260, 28),
-  textbox('market-green-label', 'MARKET GREEN', 520, 470, 210, 28),
-  textbox('street-label-west', 'WEST MARKET ROAD', 120, 458, 210, 24, -90),
-  textbox('street-label-east', 'EAST MARKET ROAD', 1260, 458, 210, 24, 90),
+  imageProp('north-entry', 'North Entry', 674, 92, 58, 58, iconImage('entrance')),
+  imageProp('west-entry', 'West Entry', 74, 448, 58, 58, iconImage('entrance')),
+  imageProp('east-entry', 'East Exit', 1268, 448, 58, 58, iconImage('entrance')),
+  imageProp('south-exit', 'South Exit', 674, 782, 58, 58, iconImage('entrance')),
 
-  // A simple legend as an image prop.
-  imageProp('legend', 'Market Guide', 1120, 88, 246, 160, legendImage()),
+  // ------------------------------------------------------------------------
+  // 8. Lightweight labels — enough to navigate, not a poster.
+  // ------------------------------------------------------------------------
+  textbox('north-title', 'NORTH BAZAAR', 372, 120, 170, 28),
+  textbox('garden-title', 'GARDEN MARKET', 864, 120, 190, 28),
+  textbox('food-title', 'FOOD COURT', 270, 548, 160, 28),
+  textbox('river-title', 'RIVERSIDE ROW', 952, 548, 190, 28),
+  textbox('craft-title', 'CRAFT WALK', 430, 688, 150, 26),
+  textbox('family-title', 'FAMILY MARKET', 844, 688, 190, 26),
+  textbox('north-entry-label', 'NORTH ENTRY', 624, 100, 160, 24),
+  textbox('west-entry-label', 'WEST ENTRY', 40, 410, 130, 24, -90),
+  textbox('east-entry-label', 'EAST EXIT', 1232, 412, 130, 24, 90),
+  textbox('south-exit-label', 'SOUTH EXIT', 624, 828, 160, 24),
 ];
