@@ -77,9 +77,14 @@ const FILTER_CONTENT_BLUR = 0.9;
 const SELECTED_SCALE = 1.04;
 const SEARCH_HIGHLIGHT_GLOW_COLOR = 0x38bdf8;
 const SEARCH_HIGHLIGHT_CORE_COLOR = 0xffffff;
-const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.22;
-const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.96;
+const SEARCH_HIGHLIGHT_GLOW_ALPHA = 0.32;
+const SEARCH_HIGHLIGHT_CORE_ALPHA = 0.98;
 const SEARCH_HIGHLIGHT_BLUR = 8;
+const HIGHLIGHT_PULSE_SPEED = 0.0038;
+const HIGHLIGHT_OUTER_MIN_ALPHA = 0.16;
+const HIGHLIGHT_OUTER_MAX_ALPHA = 0.42;
+const HIGHLIGHT_MID_MIN_ALPHA = 0.22;
+const HIGHLIGHT_MID_MAX_ALPHA = 0.58;
 
 export interface CameraSnapshot {
   x: number;
@@ -186,6 +191,7 @@ export class SpaceRenderer {
   private hoveredId: string | null = null;
   private focusedId: string | null = null;
   private searchHighlightedId: string | null = null;
+  private highlightPulseTime = 0;
   private readonly selectedIds = new Set<string>();
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
@@ -354,6 +360,25 @@ export class SpaceRenderer {
 
     if (previous) this.repaint(previous);
     if (id) this.repaint(id);
+  }
+
+  /** Drives the soft locator pulse used by search results and selections. */
+  tick(deltaMS: number): void {
+    if (this.searchHighlightedId === null && this.selectedIds.size === 0) return;
+
+    this.highlightPulseTime += deltaMS;
+    const pulse = 0.5 + 0.5 * Math.sin(this.highlightPulseTime * HIGHLIGHT_PULSE_SPEED);
+    const touched = new Set<string>();
+
+    if (this.searchHighlightedId) touched.add(this.searchHighlightedId);
+    this.selectedIds.forEach((id) => touched.add(id));
+
+    touched.forEach((id) => {
+      const entry = this.spaceNodes.get(id);
+      const space = this.spaceData.get(id);
+      if (!entry || !space) return;
+      this.drawSearchHighlight(entry.searchHighlight, space.geometry, pulse, this.selectedIds.has(id));
+    });
   }
 
   getSpaceCount(): number {
@@ -1131,8 +1156,10 @@ export class SpaceRenderer {
     this.drawCheckBadge(entry.checkBadge, geometry);
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
-    this.drawSearchHighlight(entry.searchHighlight, geometry);
-    entry.searchHighlight.visible = this.searchHighlightedId === space.id;
+    const isSearchHighlighted = this.searchHighlightedId === space.id;
+    const isSelected = this.selectedIds.has(space.id);
+    this.drawSearchHighlight(entry.searchHighlight, geometry, 0.5, isSelected || isSearchHighlighted);
+    entry.searchHighlight.visible = isSelected || isSearchHighlighted;
 
     this.drawHandle(entry.handle, geometry);
     const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
@@ -1310,33 +1337,81 @@ export class SpaceRenderer {
     }
   }
 
-  /** Draws a soft backlight halo around a searched space. */
+  /** Draws the animated backlight used for search and selection. */
   private drawSearchHighlight(
     highlight: Graphics,
     geometry: Space['geometry'],
+    pulse = 0.5,
+    active = true,
   ): void {
     highlight.clear();
 
-    const { width, height } = geometry;
-    const pad = 7;
-    const glowWidth = width + pad * 2;
-    const glowHeight = height + pad * 2;
-    const radius = Math.min(14, Math.max(6, Math.min(glowWidth, glowHeight) * 0.12));
+    if (!active) return;
 
-    highlight.roundRect(-pad, -pad, glowWidth, glowHeight, radius);
+    const { width, height } = geometry;
+    const minSide = Math.min(width, height);
+    if (width <= 2 || height <= 2) return;
+
+    const outerAlpha =
+      HIGHLIGHT_OUTER_MIN_ALPHA +
+      (HIGHLIGHT_OUTER_MAX_ALPHA - HIGHLIGHT_OUTER_MIN_ALPHA) * pulse;
+    const midAlpha =
+      HIGHLIGHT_MID_MIN_ALPHA +
+      (HIGHLIGHT_MID_MAX_ALPHA - HIGHLIGHT_MID_MIN_ALPHA) * pulse;
+
+    const outerPad = 14 + pulse * 5;
+    const outerW = width + outerPad * 2;
+    const outerH = height + outerPad * 2;
+    const radius = Math.min(18, Math.max(8, minSide * 0.14));
+
+    // Wide soft bloom behind the booth.
+    highlight.roundRect(-outerPad, -outerPad, outerW, outerH, radius);
     highlight.fill({
       color: SEARCH_HIGHLIGHT_GLOW_COLOR,
-      alpha: SEARCH_HIGHLIGHT_GLOW_ALPHA,
+      alpha: outerAlpha,
     });
 
+    const midPad = 7 + pulse * 2;
+    const midW = width + midPad * 2;
+    const midH = height + midPad * 2;
+    highlight.roundRect(-midPad, -midPad, midW, midH, Math.min(16, radius));
+    highlight.fill({
+      color: SEARCH_HIGHLIGHT_GLOW_COLOR,
+      alpha: midAlpha,
+    });
+
+    // Crisp luminous rim makes the target obvious without recoloring the booth.
     const corePad = 3;
-    const coreWidth = width + corePad * 2;
-    const coreHeight = height + corePad * 2;
-    highlight.roundRect(-corePad, -corePad, coreWidth, coreHeight, Math.min(10, radius));
+    const coreW = width + corePad * 2;
+    const coreH = height + corePad * 2;
+    highlight.roundRect(
+      -corePad,
+      -corePad,
+      coreW,
+      coreH,
+      Math.min(12, radius),
+    );
     highlight.stroke({
       color: SEARCH_HIGHLIGHT_CORE_COLOR,
       alpha: SEARCH_HIGHLIGHT_CORE_ALPHA,
-      width: 2.5,
+      width: 2.5 + pulse * 0.8,
+    });
+
+    // Small directional "sweep" catches the eye during search navigation.
+    const sweep = Math.max(18, Math.min(width * 0.34, 86));
+    highlight.moveTo(
+      -width / 2 + width * 0.18,
+      -height / 2 - 2,
+    );
+    highlight.lineTo(
+      -width / 2 + width * 0.18 + sweep,
+      -height / 2 - 2,
+    );
+    highlight.stroke({
+      color: SEARCH_HIGHLIGHT_CORE_COLOR,
+      alpha: 0.38 + pulse * 0.34,
+      width: 2,
+      cap: 'round',
     });
   }
 
