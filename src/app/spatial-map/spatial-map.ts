@@ -11,7 +11,7 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
-import { Space, SpaceStatus } from '../../lib/core/types';
+import { Space, SpaceGeometry, SpaceStatus } from '../../lib/core/types';
 import { generateBenchSpaces } from './generate-bench-spaces';
 import { TEST_SPACES } from './test-spaces';
 
@@ -23,6 +23,12 @@ const STATUS_OPTIONS: SpaceStatus[] = [
   'booked',
   'unavailable',
   'maintenance',
+];
+
+const VECTOR_SHAPE_OPTIONS: Array<{ value: SpaceGeometry['type']; label: string; icon: string }> = [
+  { value: 'rectangle', label: 'Rectangle', icon: '▭' },
+  { value: 'circle', label: 'Circle', icon: '○' },
+  { value: 'ellipse', label: 'Ellipse', icon: '⬭' },
 ];
 
 /** Human-readable label + swatch color per status, for the legend and
@@ -61,13 +67,21 @@ const SIZE_PRESETS: SizePreset[] = [
 interface SpaceFormState {
   name: string;
   status: SpaceStatus;
+  shape: SpaceGeometry['type'];
   width: number;
   height: number;
   imageDataUrl: string | null;
 }
 
 function defaultFormState(): SpaceFormState {
-  return { name: '', status: 'available', width: 80, height: 60, imageDataUrl: null };
+  return {
+    name: '',
+    status: 'available',
+    shape: 'rectangle',
+    width: 80,
+    height: 60,
+    imageDataUrl: null,
+  };
 }
 
 /** The inspector drawer (300px) covers the right edge while it's open, and
@@ -152,6 +166,26 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <span>Name</span>
           <input type="text" [(ngModel)]="form.name" placeholder="e.g. Booth A101" />
         </label>
+
+        @if (mode() === 'edit') {
+          <label class="field">
+            <span>Vector shape</span>
+            <div class="shape-picker" role="group" aria-label="Vector shape">
+              @for (shape of vectorShapeOptions; track shape.value) {
+                <button
+                  type="button"
+                  class="shape-option"
+                  [class.active]="form.shape === shape.value"
+                  [attr.aria-pressed]="form.shape === shape.value"
+                  (click)="setShape(shape.value)"
+                >
+                  <span class="shape-icon" aria-hidden="true">{{ shape.icon }}</span>
+                  <span>{{ shape.label }}</span>
+                </button>
+              }
+            </div>
+          </label>
+        }
 
         <label class="field">
           <span>Status</span>
@@ -454,6 +488,42 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         font: inherit;
       }
 
+      .shape-picker {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+      }
+
+      .shape-option {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        min-height: 54px;
+        padding: 6px 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #c3c7d1;
+        transition: background 0.15s, border-color 0.15s, color 0.15s;
+      }
+
+      .shape-option:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .shape-option.active {
+        background: rgba(58, 122, 254, 0.18);
+        border-color: #3a7afe;
+        color: #fff;
+      }
+
+      .shape-icon {
+        font-size: 20px;
+        line-height: 1;
+      }
+
       .preset-row {
         display: flex;
         gap: 6px;
@@ -651,6 +721,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly benchSizes = BENCH_SIZES;
   protected readonly statusOptions = STATUS_OPTIONS;
   protected readonly sizePresets = SIZE_PRESETS;
+  protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected form: SpaceFormState = defaultFormState();
 
   private readonly engine = new SpatialMapEngine();
@@ -754,6 +825,7 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
+      shape: space.geometry.type,
       width: space.geometry.width,
       height: space.geometry.height,
       imageDataUrl: space.properties.imageUrl ?? null,
@@ -779,6 +851,18 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected applyPreset(preset: SizePreset): void {
     this.form.width = preset.width;
     this.form.height = preset.height;
+  }
+
+  protected setShape(shape: SpaceGeometry['type']): void {
+    this.form.shape = shape;
+
+    // A circle is always rendered as a true circle, using the current width
+    // as its diameter. Ellipse/rectangle keep independent dimensions.
+    if (shape === 'circle') {
+      const diameter = Math.max(4, Number(this.form.width) || 80);
+      this.form.width = diameter;
+      this.form.height = diameter;
+    }
   }
 
   protected onImageSelected(event: Event): void {
@@ -807,17 +891,22 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   }
 
   protected saveForm(): void {
-    const { name, status, width, height, imageDataUrl } = this.form;
+    const { name, status, shape, width, height, imageDataUrl } = this.form;
     const w = Math.max(4, Number(width) || 80);
-    const h = Math.max(4, Number(height) || 60);
+    const h = shape === 'circle' ? w : Math.max(4, Number(height) || 60);
 
     if (this.isAdding()) {
       const id = `space-${Date.now()}`;
+      const position = this.nextPlacement(w, h);
       const newSpace: Space = {
         id,
         type: 'booth',
-        geometry: { type: 'rectangle', ...this.nextPlacement(w, h), width: w, height: h },
-        properties: { name: name || id, status, imageUrl: imageDataUrl ?? undefined },
+        geometry: { type: shape, ...position, width: w, height: h },
+        properties: {
+          name: name || id,
+          status,
+          imageUrl: shape === 'rectangle' ? (imageDataUrl ?? undefined) : undefined,
+        },
       };
       this.engine.addSpace(newSpace);
       this.isAdding.set(false);
@@ -828,8 +917,12 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     const id = this.editingId();
     if (!id) return;
     this.engine.updateSpace(id, {
-      geometry: { width: w, height: h },
-      properties: { name: name || id, status, imageUrl: imageDataUrl ?? undefined },
+      geometry: { type: shape, width: w, height: h },
+      properties: {
+        name: name || id,
+        status,
+        imageUrl: shape === 'rectangle' ? (imageDataUrl ?? undefined) : undefined,
+      },
     });
     this.editingId.set(null);
     this.engine.clearSelection();
