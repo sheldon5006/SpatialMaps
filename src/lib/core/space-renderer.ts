@@ -777,6 +777,24 @@ export class SpaceRenderer {
     entry.label.position.set(width / 2, height / 2);
   }
 
+  /**
+   * Applies the subtle focus blur to the booth's actual content only.
+   * The liquid-glass overlay remains crisp, while the shape, image, label,
+   * badge, and edit handle recede together when a visual filter is active.
+   */
+  private applyContentFocus(entry: SpaceNode, recede: boolean): void {
+    const filters = recede ? [this.contentBlurFilter] : [];
+
+    entry.shape.filters = filters;
+    entry.label.filters = filters;
+    entry.checkBadge.filters = filters;
+    entry.handle.filters = filters;
+
+    if (entry.image) {
+      entry.image.sprite.filters = filters;
+    }
+  }
+
   /** Draws a liquid-glass surface matching the receded vector geometry. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
