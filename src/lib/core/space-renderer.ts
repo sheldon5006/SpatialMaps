@@ -22,6 +22,10 @@ const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
 const SELECTED_STROKE_WIDTH = 3;
 
+const CHECK_BADGE_RADIUS = 8;
+const CHECK_BADGE_MARGIN = 6;
+const CHECK_COLOR = 0xffffff;
+
 const HANDLE_OFFSET = 26;
 const HANDLE_RADIUS = 6;
 /** The clickable area is larger than the visual dot — easier to grab with
@@ -71,12 +75,33 @@ export interface CameraSnapshot {
  */
 export type MapMode = 'view' | 'edit';
 
+/** Decides whether a space can be added to the user's selection. Status is
+ *  business truth; this is the only thing allowed to gate selection — the
+ *  UI must never infer selectability from color or any other visual cue.
+ *  Override via engine.setSelectionRule() for real status/business rules;
+ *  the default is a reasonable placeholder (available/reserved only). */
+export type SelectionRule = (space: Space) => boolean;
+
+const DEFAULT_SELECTION_RULE: SelectionRule = (space) => {
+  const status = space.properties.status;
+  return status === 'available' || status === 'reserved';
+};
+
 export interface SpaceRendererEvents extends Record<string, unknown> {
   hover: string | null;
   select: string[];
+  /** A previously selected space was removed from the selection because it
+   *  stopped being selectable (e.g. a status update made it unavailable) —
+   *  not because the user deselected it. Lets a host app notify the user. */
+  selectioninvalidated: string[];
+  focus: string | null;
   modechange: MapMode;
   /** Fires once, when a move or rotate drag in edit mode ends — not on every pointermove. */
   spacetransform: { id: string; geometry: Space['geometry'] };
+  /** Fires whenever the loaded space set changes shape (load/add/remove) —
+   *  lets a host UI (e.g. a selection tray or accessible proxy list) keep
+   *  its own mirror of the data in sync without polling. */
+  spaceschange: Space[];
 }
 
 /**
@@ -95,6 +120,8 @@ interface SpaceNode {
   label: Text;
   /** The "glass pane" drawn over a space when it's receded behind focus. */
   glass: Graphics;
+  /** Small corner badge shown only while selected. */
+  checkBadge: Graphics;
   image?: { sprite: Sprite; url: string };
 }
 
@@ -121,7 +148,9 @@ export class SpaceRenderer {
   private statusStyles: StatusStyleMap = DEFAULT_STATUS_STYLES;
 
   private hoveredId: string | null = null;
+  private focusedId: string | null = null;
   private readonly selectedIds = new Set<string>();
+  private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
   private mode: MapMode = 'view';
 
@@ -169,19 +198,27 @@ export class SpaceRenderer {
     if (this.mode === mode) return;
     this.cancelDrag();
     this.mode = mode;
-    const cursor = mode === 'edit' ? 'move' : 'pointer';
-    // shape is the actual hit target (node itself has no hitArea), so its
-    // own cursor is what Pixi displays — kept in sync with node's.
-    this.spaceNodes.forEach(({ node, shape }) => {
-      node.cursor = cursor;
-      shape.cursor = cursor;
-    });
+    this.spaceData.forEach((space, id) => this.updateCursor(id, space));
     // The rotation handle only shows for a selected space in edit mode,
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
     // The focus-blur effect only applies in view mode — clear/apply it now.
     this.updateFocusEffect();
     this.events.emit('modechange', mode);
+  }
+
+  /** Edit mode is always "move"; view mode is "pointer" for selectable
+   *  spaces and the browser default for ones the SelectionRule rejects —
+   *  a non-selectable space should never look clickable. */
+  private updateCursor(id: string, space: Space): void {
+    const entry = this.spaceNodes.get(id);
+    if (!entry) return;
+    const cursor =
+      this.mode === 'edit' ? 'move' : this.isSelectable(space) ? 'pointer' : 'default';
+    // shape is the actual hit target (node itself has no hitArea), so its
+    // own cursor is what Pixi displays — kept in sync with node's.
+    entry.node.cursor = cursor;
+    entry.shape.cursor = cursor;
   }
 
   getMode(): MapMode {
@@ -191,6 +228,28 @@ export class SpaceRenderer {
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
     this.statusStyles = { ...DEFAULT_STATUS_STYLES, ...styles };
+  }
+
+  /** Overrides which spaces can be selected — status/business truth is the
+   *  only thing allowed to decide this, never a visual property. */
+  setSelectionRule(rule: SelectionRule): void {
+    this.selectionRule = rule;
+    this.spaceData.forEach((space, id) => this.updateCursor(id, space));
+  }
+
+  isSelectable(space: Space): boolean {
+    return this.selectionRule(space);
+  }
+
+  /** Keyboard/programmatic focus — visually treated like hover (a visible
+   *  focus indicator), independent of whether the pointer is involved. */
+  setFocused(id: string | null): void {
+    if (this.focusedId === id) return;
+    const previous = this.focusedId;
+    this.focusedId = id;
+    if (previous) this.repaint(previous);
+    if (id) this.repaint(id);
+    this.events.emit('focus', id);
   }
 
   getSpaceCount(): number {
@@ -227,6 +286,8 @@ export class SpaceRenderer {
       this.spaceNodes.set(space.id, entry);
       this.world.addChild(entry.node);
     }
+
+    this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
   /** Adds one space. If `id` already exists, replaces it (with a dev warning — likely a caller bug). */
@@ -243,6 +304,7 @@ export class SpaceRenderer {
     this.spaceNodes.set(space.id, entry);
     this.world.addChild(entry.node);
     this.updateFocusEffect(); // a newly added space should be dimmed too if a focus is active
+    this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
   /** Merges `patch` into an existing space's geometry/properties and repaints/repositions it. */
@@ -266,6 +328,20 @@ export class SpaceRenderer {
 
     this.paintSpace(entry, merged);
     this.applyGeometry(entry, merged.geometry);
+    this.updateCursor(id, merged);
+
+    // A status/data change can make a previously selected space invalid
+    // (e.g. a backend update marks it sold) — the UI must never keep
+    // showing a selection the business rules no longer allow.
+    if (this.selectedIds.has(id) && !this.isSelectable(merged)) {
+      this.selectedIds.delete(id);
+      this.repaint(id);
+      this.updateFocusEffect();
+      this.events.emit('select', Array.from(this.selectedIds));
+      this.events.emit('selectioninvalidated', [id]);
+    }
+
+    this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
   /** Removes one space. Clears it from hover/selection/drag/rotate state if applicable. */
@@ -286,15 +362,24 @@ export class SpaceRenderer {
       this.hoveredId = null;
       this.events.emit('hover', null);
     }
+    if (this.focusedId === id) this.focusedId = null;
     if (this.selectedIds.delete(id)) {
       this.events.emit('select', Array.from(this.selectedIds));
     }
+    this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
-  /** Toggles a space's selection state. Selection is multi-select by default. */
+  /**
+   * Toggles a space's selection state. Selection is multi-select by
+   * default. Selecting (not deselecting) a space the current
+   * SelectionRule rejects is a no-op — status/business rules are the only
+   * thing allowed to gate this, and the UI must respect them exactly.
+   */
   selectSpace(id: string, selected: boolean): void {
     if (selected === this.selectedIds.has(id)) return;
     if (selected) {
+      const space = this.spaceData.get(id);
+      if (!space || !this.isSelectable(space)) return;
       this.selectedIds.add(id);
     } else {
       this.selectedIds.delete(id);
@@ -378,6 +463,7 @@ export class SpaceRenderer {
     this.spaceData.clear();
     this.selectedIds.clear();
     this.hoveredId = null;
+    this.focusedId = null;
   }
 
   private createSpaceNode(space: Space): SpaceNode {
@@ -412,6 +498,14 @@ export class SpaceRenderer {
     glass.visible = false;
     node.addChild(glass);
 
+    // Selected-state badge — a small check mark, visible regardless of the
+    // booth's own fill color (status must stay distinguishable by more
+    // than color alone, and so must selection).
+    const checkBadge = new Graphics();
+    checkBadge.eventMode = 'none';
+    checkBadge.visible = false;
+    node.addChild(checkBadge);
+
     const handle = new Graphics();
     handle.eventMode = 'none';
     handle.hitArea = new Circle(0, 0, HANDLE_HIT_RADIUS);
@@ -420,12 +514,9 @@ export class SpaceRenderer {
     handle.on('pointerdown', (event) => this.onHandlePointerDown(space.id, event));
     node.addChild(handle);
 
-    const entry: SpaceNode = { node, shape, handle, label, glass };
+    const entry: SpaceNode = { node, shape, handle, label, glass, checkBadge };
 
     node.eventMode = 'static';
-    const cursor = this.mode === 'edit' ? 'move' : 'pointer';
-    node.cursor = cursor;
-    shape.cursor = cursor;
     node.label = space.id;
 
     node.on('pointerover', () => this.setHover(space.id));
@@ -435,6 +526,11 @@ export class SpaceRenderer {
 
     this.paintSpace(entry, space);
     this.applyGeometry(entry, space.geometry);
+    // Not using updateCursor(id, ...) here — it looks the entry up via
+    // spaceNodes, which the caller only populates after this returns.
+    const cursor = this.mode === 'edit' ? 'move' : this.isSelectable(space) ? 'pointer' : 'default';
+    node.cursor = cursor;
+    shape.cursor = cursor;
 
     return entry;
   }
@@ -532,7 +628,7 @@ export class SpaceRenderer {
     const { geometry, properties } = space;
     const baseStyle =
       (properties.status && this.statusStyles[properties.status]) || FALLBACK_STATUS_STYLE;
-    const style = this.applyInteractionState(space.id, baseStyle);
+    const style = this.applyInteractionState(space, baseStyle);
     const hasImage = typeof properties.imageUrl === 'string' && properties.imageUrl.length > 0;
 
     entry.shape.clear().rect(0, 0, geometry.width, geometry.height);
@@ -547,6 +643,8 @@ export class SpaceRenderer {
     this.updateImage(entry, space);
     this.updateLabel(entry, space);
     this.drawGlass(entry.glass, geometry); // size only — visibility is set by updateFocusEffect()
+    this.drawCheckBadge(entry.checkBadge, geometry);
+    entry.checkBadge.visible = this.selectedIds.has(space.id);
 
     this.drawHandle(entry.handle, geometry);
     const showHandle = this.mode === 'edit' && this.selectedIds.has(space.id);
@@ -580,6 +678,26 @@ export class SpaceRenderer {
       .rect(0, 0, geometry.width, geometry.height)
       .fill({ color: GLASS_TINT_COLOR, alpha: GLASS_TINT_ALPHA })
       .stroke({ color: GLASS_EDGE_COLOR, width: 1, alpha: GLASS_EDGE_ALPHA });
+  }
+
+  /** Small corner check badge shown while selected — selection stays
+   *  identifiable even on a status color the outline doesn't contrast
+   *  well against, and even to someone who can't distinguish the outline
+   *  color itself. */
+  private drawCheckBadge(badge: Graphics, geometry: Space['geometry']): void {
+    const cx = geometry.width - CHECK_BADGE_MARGIN - CHECK_BADGE_RADIUS;
+    const cy = CHECK_BADGE_MARGIN + CHECK_BADGE_RADIUS;
+    const fill = this.statusStyles.selected?.fill ?? DEFAULT_STATUS_STYLES.selected.fill;
+
+    badge
+      .clear()
+      .circle(cx, cy, CHECK_BADGE_RADIUS)
+      .fill({ color: fill })
+      .stroke({ color: CHECK_COLOR, width: 1.5 })
+      .moveTo(cx - 3.5, cy)
+      .lineTo(cx - 1, cy + 2.5)
+      .lineTo(cx + 3.5, cy - 3)
+      .stroke({ color: CHECK_COLOR, width: 1.75 });
   }
 
   private drawHandle(handle: Graphics, geometry: Space['geometry']): void {
@@ -651,9 +769,9 @@ export class SpaceRenderer {
   }
 
   /** Layers hover/selection accents on top of a space's base status style. */
-  private applyInteractionState(id: string, base: StatusStyle): StatusStyle {
+  private applyInteractionState(space: Space, base: StatusStyle): StatusStyle {
+    const id = space.id;
     const isSelected = this.selectedIds.has(id);
-    const isHovered = this.hoveredId === id;
 
     if (isSelected) {
       const selectedStyle = this.statusStyles.selected ?? DEFAULT_STATUS_STYLES.selected;
@@ -663,6 +781,12 @@ export class SpaceRenderer {
         strokeWidth: SELECTED_STROKE_WIDTH,
       };
     }
+
+    // In edit mode every space is a legitimate drag/select target, so hover
+    // always shows feedback there. In view mode, a space the SelectionRule
+    // rejects shouldn't look interactive just because the pointer is over it.
+    const isHovered = (this.hoveredId === id || this.focusedId === id) &&
+      (this.mode === 'edit' || this.isSelectable(space));
 
     if (isHovered) {
       return {

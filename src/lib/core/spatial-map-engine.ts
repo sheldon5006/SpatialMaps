@@ -2,7 +2,7 @@ import { Application, Container } from 'pixi.js';
 import { Camera } from './camera';
 import { CameraTransitions, TransitionOptions } from './camera-transitions';
 import { PointerInteraction } from './pointer-interaction';
-import { MapMode, SpaceRenderer, SpaceRendererEvents } from './space-renderer';
+import { MapMode, SelectionRule, SpaceRenderer, SpaceRendererEvents } from './space-renderer';
 import {
   SPATIAL_MAP_EXPORT_VERSION,
   Space,
@@ -11,7 +11,7 @@ import {
 } from './types';
 
 export type SpatialMapEngineEvents = SpaceRendererEvents;
-export type { MapMode };
+export type { MapMode, SelectionRule };
 
 /**
  * SpatialMapEngine
@@ -158,6 +158,22 @@ export class SpatialMapEngine {
 
   clearSelection(): void {
     this.renderer?.clearSelection();
+  }
+
+  /** Overrides which spaces can be selected — status/business rules are the
+   *  only thing allowed to decide this, never a visual property like color. */
+  setSelectionRule(rule: SelectionRule): void {
+    this.renderer?.setSelectionRule(rule);
+  }
+
+  isSelectable(id: string): boolean {
+    const space = this.renderer?.getSpace(id);
+    return !!space && (this.renderer?.isSelectable(space) ?? false);
+  }
+
+  /** Keyboard/programmatic focus — shown as a visible focus indicator. */
+  setFocused(id: string | null): void {
+    this.renderer?.setFocused(id);
   }
 
   /** 'view' (hover/select/pan/zoom) or 'edit' (+ drag spaces to reposition them). */

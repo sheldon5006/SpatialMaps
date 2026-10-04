@@ -2,6 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import {
   AfterViewInit,
   Component,
+  computed,
   ElementRef,
   NgZone,
   OnDestroy,
@@ -23,6 +24,26 @@ const STATUS_OPTIONS: SpaceStatus[] = [
   'unavailable',
   'maintenance',
 ];
+
+/** Human-readable label + swatch color per status, for the legend and
+ *  tooltip — kept here rather than invented per-use so they stay in sync. */
+const STATUS_META: Record<SpaceStatus, { label: string; color: string }> = {
+  available: { label: 'Available', color: '#2ecc71' },
+  reserved: { label: 'Reserved', color: '#f1c40f' },
+  booked: { label: 'Booked', color: '#e67e22' },
+  unavailable: { label: 'Unavailable', color: '#7f8c8d' },
+  maintenance: { label: 'Maintenance', color: '#9b59b6' },
+  selected: { label: 'Selected', color: '#3498db' },
+};
+
+/** Status/business truth decides what's selectable — never color, never a
+ *  UI guess. Mirrors the engine's own default SelectionRule so the legend
+ *  and tooltip can say "selectable" accurately; a real integration would
+ *  call engine.setSelectionRule() with its actual backend rule and this
+ *  would need to match it (documented at that call site below). */
+function isSelectableStatus(status: SpaceStatus | undefined): boolean {
+  return status === 'available' || status === 'reserved';
+}
 
 interface SizePreset {
   label: string;
