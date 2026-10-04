@@ -888,8 +888,14 @@ export class SpaceRenderer {
     // and props use a lightweight map-symbol renderer instead.
     entry.shape.clear();
 
-    if (space.type !== 'booth') {
-      this.drawContextElement(entry.shape, space, geometry.width, geometry.height);
+    if (space.type === 'prop') {
+      if (!hasImage) {
+        this.drawPropShape(
+          entry.shape,
+          geometry,
+          this.parsePropColor(space.properties.propColor),
+        );
+      }
     } else {
       switch (geometry.type) {
         case 'circle': {
@@ -992,122 +998,53 @@ export class SpaceRenderer {
     return Number.parseInt(normalized, 16);
   }
 
-  private drawContextElement(
-    shape: Graphics,
-    space: Space,
-    width: number,
-    height: number,
-  ): void {
-    const kind = space.properties.propKind as SpacePropKind | undefined;
-    const color = this.parsePropColor(space.properties.propColor);
+  /** Draws the selected vector shape for a prop. */
+  private drawPropShape(shape: Graphics, geometry: Space['geometry'], color: number): void {
+    const { width, height } = geometry;
 
-    switch (kind) {
-      case 'tree':
-        shape
-          .rect(width * 0.44, height * 0.52, width * 0.12, height * 0.35)
-          .fill({ color: 0x76553a, alpha: 1 });
-        shape
-          .circle(width * 0.5, height * 0.38, Math.min(width, height) * 0.24)
-          .fill({ color, alpha: 1 });
-        shape
-          .circle(width * 0.35, height * 0.45, Math.min(width, height) * 0.16)
-          .fill({ color, alpha: 0.95 });
-        shape
-          .circle(width * 0.65, height * 0.45, Math.min(width, height) * 0.16)
-          .fill({ color, alpha: 0.95 });
+    switch (geometry.type) {
+      case 'circle':
+        shape.circle(width / 2, height / 2, Math.min(width, height) / 2);
         break;
-
-      case 'road':
-        shape
-          .roundRect(0, height * 0.2, width, height * 0.6, Math.min(10, height * 0.3))
-          .fill({ color, alpha: 0.95 });
-        shape
-          .moveTo(width * 0.08, height * 0.5)
-          .lineTo(width * 0.92, height * 0.5)
-          .stroke({ color: 0xf5f5f5, width: Math.max(1, height * 0.08), alpha: 0.8 });
+      case 'ellipse':
+        shape.ellipse(width / 2, height / 2, width / 2, height / 2);
         break;
-
-      case 'path':
-        shape
-          .roundRect(0, height * 0.28, width, height * 0.44, Math.min(8, height * 0.22))
-          .fill({ color, alpha: 0.95 });
+      case 'rounded-rectangle':
+        shape.roundRect(
+          0,
+          0,
+          width,
+          height,
+          Math.min(16, Math.min(width, height) * 0.18),
+        );
         break;
-
-      case 'parking':
-        shape
-          .roundRect(0, 0, width, height, Math.min(8, Math.min(width, height) * 0.15))
-          .fill({ color, alpha: 0.9 });
-        shape
-          .stroke({ color: 0xcfd5db, width: 1, alpha: 0.7 });
+      case 'triangle':
+        shape.poly([width / 2, 0, width, height, 0, height]);
         break;
-
-      case 'building':
-        shape
-          .rect(0, 0, width, height)
-          .fill({ color, alpha: 1 })
-          .stroke({ color: 0x8f7754, width: 2, alpha: 0.85 });
+      case 'diamond':
+        shape.poly([
+          width / 2, 0,
+          width, height / 2,
+          width / 2, height,
+          0, height / 2,
+        ]);
         break;
-
-      case 'entrance':
-        shape
-          .poly([
-            width / 2, 0,
-            width, height * 0.55,
-            width, height,
-            0, height,
-            0, height * 0.55,
-          ])
-          .fill({ color, alpha: 0.95 });
+      case 'line':
+        shape.roundRect(
+          0,
+          0,
+          width,
+          Math.max(2, height),
+          Math.max(1, height / 2),
+        );
         break;
-
-      case 'garden':
-        shape
-          .ellipse(width / 2, height / 2, width / 2, height / 2)
-          .fill({ color, alpha: 0.7 })
-          .stroke({ color: 0x4c7d34, width: 1.5, alpha: 0.8 });
-        break;
-
-      case 'bench':
-      case 'seating':
-        shape
-          .rect(width * 0.15, height * 0.32, width * 0.7, Math.max(3, height * 0.13))
-          .fill({ color, alpha: 1 });
-        shape
-          .rect(width * 0.2, height * 0.62, width * 0.08, height * 0.25)
-          .fill({ color: 0x6a4c3c, alpha: 1 });
-        shape
-          .rect(width * 0.72, height * 0.62, width * 0.08, height * 0.25)
-          .fill({ color: 0x6a4c3c, alpha: 1 });
-        break;
-
-      case 'toilet':
-        shape
-          .roundRect(0, 0, width, height, Math.min(8, Math.min(width, height) * 0.15))
-          .fill({ color, alpha: 1 })
-          .stroke({ color: 0x4e6778, width: 1.5, alpha: 0.9 });
-        break;
-
-      case 'garbage-bin':
-        shape
-          .roundRect(width * 0.2, height * 0.2, width * 0.6, height * 0.62, Math.min(5, width * 0.1))
-          .fill({ color, alpha: 1 });
-        shape
-          .rect(width * 0.14, height * 0.12, width * 0.72, Math.max(2, height * 0.08))
-          .fill({ color: 0x34434a, alpha: 1 });
-        break;
-
-      case 'information':
-        shape
-          .circle(width / 2, height / 2, Math.min(width, height) * 0.38)
-          .fill({ color, alpha: 1 });
-        break;
-
+      case 'rectangle':
       default:
-        shape
-          .rect(0, 0, width, height)
-          .fill({ color, alpha: 0.72 });
+        shape.rect(0, 0, width, height);
         break;
     }
+
+    shape.fill({ color, alpha: 1 });
   }
 
   /** Shows the space's name centered on it, hidden when the box is too small to read. */
