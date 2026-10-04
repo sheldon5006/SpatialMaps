@@ -1988,14 +1988,14 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
     this.editingId.set(null);
   }
 
-  protected bringToFront(): void {
-    const id = this.editingId();
-    if (id) this.bringToFront(id);
+  bringToFront(id?: string): void {
+    const targetId = id ?? this.editingId();
+    if (targetId) this.engine.bringToFront(targetId);
   }
 
-  protected sendToBack(): void {
-    const id = this.editingId();
-    if (id) this.sendToBack(id);
+  sendToBack(id?: string): void {
+    const targetId = id ?? this.editingId();
+    if (targetId) this.engine.sendToBack(targetId);
   }
 
   // ---- Dev tools: camera ----
