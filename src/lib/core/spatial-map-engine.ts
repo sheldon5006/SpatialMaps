@@ -63,6 +63,7 @@ export class SpatialMapEngine {
   private baseZoom = DEFAULT_SPATIAL_MAP_SETTINGS.zoom.baseZoom;
   private gridEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.grid.enabled;
   private gridSize = DEFAULT_SPATIAL_MAP_SETTINGS.grid.size;
+  private searchEnabled = DEFAULT_SPATIAL_MAP_SETTINGS.search.enabled;
 
   private readonly onTick = (): void => {
     this.transitions?.tick();
@@ -270,6 +271,10 @@ export class SpatialMapEngine {
         this.renderer?.setGridSize(this.gridSize);
       }
     }
+
+    if (settings.search?.enabled !== undefined) {
+      this.searchEnabled = settings.search.enabled;
+    }
   }
 
   getSettings(): SpatialMapSettings {
@@ -283,6 +288,9 @@ export class SpatialMapEngine {
       grid: {
         enabled: this.gridEnabled,
         size: this.gridSize,
+      },
+      search: {
+        enabled: this.searchEnabled,
       },
     };
   }
