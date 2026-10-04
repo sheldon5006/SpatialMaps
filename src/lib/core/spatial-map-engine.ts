@@ -67,6 +67,7 @@ export class SpatialMapEngine {
 
   private readonly onTick = (): void => {
     this.transitions?.tick();
+    this.renderer?.tick(16.667);
     this.renderer?.setCameraZoom(this.transitions?.getZoom() ?? 1);
   };
 
