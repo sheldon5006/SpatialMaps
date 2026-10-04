@@ -256,6 +256,13 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
               />
             </label>
 
+            @if (!searchListOpen() && hoverPreview(); as preview) {
+              <div class="hover-chip search-panel-hover">
+                <span class="hover-chip-name">{{ preview.name }}</span>
+                <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+              </div>
+            }
+
             @if (searchListOpen()) {
               @if (searchQuery()) {
                 <div class="search-summary">
@@ -428,12 +435,22 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
           </div>
         }
 
-        <!-- Hover preview chip -->
+        <!-- Hover preview chip:
+             collapsed search -> inside search panel below the search box;
+             expanded search -> immediately beside the search panel;
+             search disabled/edit mode -> original canvas position. -->
         @if (hoverPreview(); as preview) {
-          <div class="hover-chip">
-            <span class="hover-chip-name">{{ preview.name }}</span>
-            <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
-          </div>
+          @if (mode() === 'view' && searchEnabled() && searchListOpen()) {
+            <div class="hover-chip search-adjacent-hover">
+              <span class="hover-chip-name">{{ preview.name }}</span>
+              <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+            </div>
+          } @else if (!(mode() === 'view' && searchEnabled())) {
+            <div class="hover-chip">
+              <span class="hover-chip-name">{{ preview.name }}</span>
+              <span class="hover-chip-status" [attr.data-status]="preview.status">{{ preview.status }}</span>
+            </div>
+          }
         }
 
         <!-- Contextual inspector drawer -->
@@ -953,6 +970,22 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
         padding: 0 16px 10px;
         color: #707987;
         font-size: 11px;
+      }
+
+      /* Hover information lives with the search UI instead of being hidden
+         underneath the left panel. */
+      .search-panel-hover {
+        position: static;
+        margin: 0 14px 10px;
+        width: auto;
+        align-self: stretch;
+        box-sizing: border-box;
+      }
+
+      .search-adjacent-hover {
+        top: 12px;
+        left: 320px;
+        z-index: 17;
       }
 
       .search-table-head {
