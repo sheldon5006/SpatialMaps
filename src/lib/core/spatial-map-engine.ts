@@ -2,7 +2,13 @@ import { Application, Container } from 'pixi.js';
 import { Camera } from './camera';
 import { CameraTransitions, TransitionOptions } from './camera-transitions';
 import { PointerInteraction } from './pointer-interaction';
-import { MapMode, SelectionRule, SpaceRenderer, SpaceRendererEvents } from './space-renderer';
+import {
+  MapMode,
+  SelectionRule,
+  SpaceRenderer,
+  SpaceRendererEvents,
+  VisualFilter,
+} from './space-renderer';
 import {
   SPATIAL_MAP_EXPORT_VERSION,
   Space,
@@ -11,7 +17,7 @@ import {
 } from './types';
 
 export type SpatialMapEngineEvents = SpaceRendererEvents;
-export type { MapMode, SelectionRule };
+export type { MapMode, SelectionRule, VisualFilter };
 
 /**
  * SpatialMapEngine
@@ -183,6 +189,10 @@ export class SpatialMapEngine {
 
   getMode(): MapMode {
     return this.renderer?.getMode() ?? 'view';
+  }
+
+  setVisualFilter(filter: VisualFilter): void {
+    this.renderer?.setVisualFilter(filter);
   }
 
   on<K extends keyof SpatialMapEngineEvents>(

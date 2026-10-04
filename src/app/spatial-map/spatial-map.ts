@@ -101,6 +101,24 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
           <button [class.active]="mode() === 'view'" (click)="setMode('view')">View</button>
           <button [class.active]="mode() === 'edit'" (click)="setMode('edit')">Edit</button>
         </div>
+        <div class="mode-switch">
+          <button [class.active]="visualFilter() === 'all'" (click)="setVisualFilter('all')">All</button>
+          @for (status of statusOptions; track status) {
+            <button
+              [class.active]="visualFilter() === status"
+              (click)="setVisualFilter(status)"
+            >
+              {{ statusMeta[status].label }}
+            </button>
+          }
+        </div>
+        <button
+          class="icon-btn"
+          [class.active]="visualFilter() === 'selected'"
+          (click)="setVisualFilter('selected')"
+        >
+          Selected only
+        </button>
         @if (mode() === 'edit') {
           <button class="add-space-btn" (click)="openAddForm()">
             <span class="plus">+</span> Add space
@@ -280,6 +298,7 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         margin: 12px;
         display: flex;
         align-items: center;
+        flex-wrap: wrap;
         gap: 10px;
         padding: 6px;
         border-radius: 10px;
@@ -342,6 +361,12 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 
       .icon-btn:hover {
         background: rgba(255, 255, 255, 0.08);
+      }
+
+      .icon-btn.active {
+        background: #3a7afe;
+        border-color: #3a7afe;
+        color: #fff;
       }
 
       /* ---- Hover chip ---- */
@@ -617,6 +642,8 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly selectedIds = signal<string[]>([]);
   protected readonly lastTransform = signal<string | null>(null);
   protected readonly mode = signal<MapMode>('view');
+  protected readonly visualFilter = signal<'all' | SpaceStatus | 'selected'>('all');
+  protected readonly statusMeta = STATUS_META;
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
   protected readonly isAdding = signal(false);
@@ -694,6 +721,13 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setMode(mode: MapMode): void {
     this.engine.setMode(mode);
+  }
+
+  protected setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
+    this.visualFilter.set(kind);
+    if (kind === 'all') this.engine.setVisualFilter({ type: 'all' });
+    else if (kind === 'selected') this.engine.setVisualFilter({ type: 'selected' });
+    else this.engine.setVisualFilter({ type: 'status', status: kind });
   }
 
   private syncDrawerToSelection(ids: string[]): void {

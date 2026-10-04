@@ -1,7 +1,6 @@
 import {
   BlurFilter,
   Circle,
-  ColorMatrixFilter,
   Container,
   FederatedPointerEvent,
   Graphics,
@@ -14,6 +13,7 @@ import {
   DEFAULT_STATUS_STYLES,
   FALLBACK_STATUS_STYLE,
   Space,
+  SpaceStatus,
   StatusStyle,
   StatusStyleMap,
 } from './types';
@@ -42,21 +42,18 @@ const LABEL_MIN_WIDTH = 28;
 const LABEL_MIN_HEIGHT = 20;
 
 /**
- * View-mode "focus" effect: selecting a space recedes everything else
- * behind a frosted-glass/submerged look — soft blur, desaturated, a cool
- * translucent pane over the top — rather than a flat dim. Kept gentle on
- * both axes (low blur strength, moderate alpha) because a strong blur's
- * render padding bleeds past a box's own bounds: on a tightly packed map
- * that dulls the crisp edges of the SELECTED space sitting right next to
- * it, which is the opposite of "highlighted".
+ * Filter recede: frost the booth content slightly, then sit a sharp glass
+ * pane on top (sheen + rim). Blur must not include the pane itself, or the
+ * overlay smears and reads as a dim instead of glass.
  */
-const FOCUS_BLUR_STRENGTH = 1.5;
-const FOCUS_DIM_ALPHA = 0.8;
-const FOCUS_DESATURATION = -0.6;
-const GLASS_TINT_COLOR = 0xbfe0fb;
-const GLASS_TINT_ALPHA = 0.16;
-const GLASS_EDGE_COLOR = 0xffffff;
-const GLASS_EDGE_ALPHA = 0.25;
+const CONTENT_FROST_BLUR = 1.15;
+const GLASS_PANE_COLOR = 0xeef6ff;
+const GLASS_PANE_ALPHA = 0.4;
+const GLASS_SHEEN_COLOR = 0xffffff;
+const GLASS_SHEEN_ALPHA = 0.3;
+const GLASS_HIGHLIGHT_ALPHA = 0.55;
+const GLASS_RIM_COLOR = 0xffffff;
+const GLASS_RIM_ALPHA = 0.78;
 
 /** Selection gets a slight lift — a small scale-up reads as "raised toward
  *  you", reinforcing the highlight beyond just the outline color. */
@@ -74,6 +71,12 @@ export interface CameraSnapshot {
  * draggable rotation handle. Hover/select still work the same as 'view'.
  */
 export type MapMode = 'view' | 'edit';
+
+/** Visual filter for the glass/blur overlay. 'all' shows everything crisp. */
+export type VisualFilter =
+  | { type: 'all' }
+  | { type: 'status'; status: SpaceStatus }
+  | { type: 'selected' };
 
 /** Decides whether a space can be added to the user's selection. Status is
  *  business truth; this is the only thing allowed to gate selection — the
@@ -153,6 +156,7 @@ export class SpaceRenderer {
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
 
   private mode: MapMode = 'view';
+  private visualFilter: VisualFilter = { type: 'all' };
 
   private draggingId: string | null = null;
   private dragStartPointerX = 0;
@@ -202,8 +206,6 @@ export class SpaceRenderer {
     // The rotation handle only shows for a selected space in edit mode,
     // so entering/leaving edit mode needs to repaint whatever is selected.
     this.selectedIds.forEach((id) => this.repaint(id));
-    // The focus-blur effect only applies in view mode — clear/apply it now.
-    this.updateFocusEffect();
     this.events.emit('modechange', mode);
   }
 
@@ -223,6 +225,11 @@ export class SpaceRenderer {
 
   getMode(): MapMode {
     return this.mode;
+  }
+
+  setVisualFilter(filter: VisualFilter): void {
+    this.visualFilter = filter;
+    this.updateFocusEffect();
   }
 
   /** Overrides the default fill/stroke used per status. */
@@ -287,6 +294,7 @@ export class SpaceRenderer {
       this.world.addChild(entry.node);
     }
 
+    this.updateFocusEffect();
     this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
@@ -341,6 +349,7 @@ export class SpaceRenderer {
       this.events.emit('selectioninvalidated', [id]);
     }
 
+    this.updateFocusEffect();
     this.events.emit('spaceschange', Array.from(this.spaceData.values()));
   }
 
@@ -429,17 +438,15 @@ export class SpaceRenderer {
   }
 
   /**
-   * View mode + an active selection recedes everything else behind a
-   * frosted-glass look (blur + desaturate + a translucent pane), while the
-   * selected space(s) stay crisp and lift slightly. Edit mode never applies
-   * it — full clarity is needed while editing.
+   * Recedes spaces that don't match the current visual filter behind a
+   * glass pane with a little blur. Selection itself never drives this.
    */
   private updateFocusEffect(): void {
-    const focusing = this.mode === 'view' && this.selectedIds.size > 0;
     this.spaceNodes.forEach((entry, id) => {
       const isSelected = this.selectedIds.has(id);
+      const recede = this.shouldRecede(id);
 
-      if (focusing && !isSelected) {
+      if (recede) {
         entry.node.filters = this.focusFilters;
         entry.node.alpha = FOCUS_DIM_ALPHA;
         entry.node.scale.set(1);
@@ -451,6 +458,13 @@ export class SpaceRenderer {
         entry.glass.visible = false;
       }
     });
+  }
+
+  private shouldRecede(id: string): boolean {
+    if (this.visualFilter.type === 'all') return false;
+    if (this.visualFilter.type === 'selected') return !this.selectedIds.has(id);
+    const space = this.spaceData.get(id);
+    return space?.properties.status !== this.visualFilter.status;
   }
 
   destroy(): void {
