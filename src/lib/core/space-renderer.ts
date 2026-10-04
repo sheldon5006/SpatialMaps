@@ -183,6 +183,7 @@ export class SpaceRenderer {
   private mode: MapMode = 'view';
   private visualFilter: VisualFilter = { type: 'all' };
   private gridEnabled = true;
+  private lastLabelZoom = -1;
   private gridSize = 50;
   private theme: MapTheme = 'dark';
 
@@ -286,6 +287,17 @@ export class SpaceRenderer {
     this.theme = theme;
     this.spaceData.forEach((space, id) => this.repaint(id));
     this.drawGrid();
+  }
+
+  /** Keeps important map text readable as the camera zoom changes. */
+  setCameraZoom(zoom: number): void {
+    if (Math.abs(zoom - this.lastLabelZoom) < 0.01) return;
+    this.lastLabelZoom = zoom;
+
+    this.spaceNodes.forEach((entry, id) => {
+      const space = this.spaceData.get(id);
+      if (space) this.updateLabel(entry, space);
+    });
   }
 
   setVisualFilter(filter: VisualFilter): void {
@@ -1151,34 +1163,59 @@ export class SpaceRenderer {
     shape.fill({ color, alpha: 1 });
   }
 
-  /** Shows the space's name centered on it, hidden when the box is too small to read. */
+  /** Shows important labels at a readable screen size with simple LOD. */
   private updateLabel(entry: SpaceNode, space: Space): void {
     const { width, height } = space.geometry;
     const name = space.properties.name;
+    const zoom = Math.max(0.05, this.getCamera().zoom);
+    const screenWidth = width * zoom;
+    const screenHeight = height * zoom;
 
+    const isBooth = space.type === 'booth';
     const showPropText = space.type === 'prop' && space.properties.textVisible === true;
     const showTextboxText = space.type === 'textbox';
 
-    if (
-      (!showPropText && !showTextboxText && space.type !== 'booth') ||
-      !name ||
-      width < LABEL_MIN_WIDTH ||
-      height < LABEL_MIN_HEIGHT
-    ) {
+    if (!name) {
       entry.label.visible = false;
       return;
     }
 
+    // Very small labels become visual noise at overview scale.
+    const minScreenWidth = showTextboxText ? 70 : 30;
+    const minScreenHeight = showTextboxText ? 18 : 16;
+    if (screenWidth < minScreenWidth || screenHeight < minScreenHeight) {
+      entry.label.visible = false;
+      return;
+    }
+
+    if (!isBooth && !showPropText && !showTextboxText) {
+      entry.label.visible = false;
+      return;
+    }
+
+    let displayText = name;
+
+    // At overview scale, booth IDs are much easier to scan than long names.
+    if (isBooth && screenWidth < 76) {
+      displayText = space.id;
+    }
+
     entry.label.visible = true;
-    entry.label.text = name;
-    entry.label.style.fontSize = showTextboxText
-      ? Math.max(10, Math.min(22, height * 0.42))
-      : Math.max(9, Math.min(14, height / 4));
-    entry.label.style.fill = showTextboxText ? 0x1f2937 : LABEL_COLOR;
+    entry.label.text = displayText;
+
+    const targetScreenFont = showTextboxText
+      ? (screenWidth < 130 ? 12 : 15)
+      : (screenWidth < 76 ? 10 : 11.5);
+
+    entry.label.style.fontSize = targetScreenFont / zoom;
+    entry.label.style.fill = showTextboxText ? 0x243039 : LABEL_COLOR;
     entry.label.style.stroke = showTextboxText
-      ? { color: 0xffffff, width: 2 }
-      : { color: LABEL_OUTLINE_COLOR, width: 3 };
-    entry.label.style.wordWrapWidth = Math.max(10, width - (showTextboxText ? 14 : 8));
+      ? { color: 0xffffff, width: Math.min(4, 1.8 / zoom) }
+      : { color: LABEL_OUTLINE_COLOR, width: Math.min(4, 2.2 / zoom) };
+    entry.label.style.wordWrapWidth = Math.max(
+      10,
+      width - (showTextboxText ? 12 : 6),
+    );
     entry.label.style.wordWrap = true;
     entry.label.position.set(width / 2, height / 2);
   }
