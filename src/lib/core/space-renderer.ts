@@ -711,10 +711,35 @@ export class SpaceRenderer {
     const style = this.applyInteractionState(space, baseStyle);
     const hasImage = typeof properties.imageUrl === 'string' && properties.imageUrl.length > 0;
 
-    entry.shape.clear().rect(0, 0, geometry.width, geometry.height);
-    // An image fill replaces the flat status color, but the status/hover/
-    // selection stroke still shows on top so state stays readable.
-    entry.shape.fill({ color: style.fill, alpha: hasImage ? 0 : (style.fillAlpha ?? 1) });
+    // Draw the selected vector geometry.
+    entry.shape.clear();
+
+    switch (geometry.type) {
+      case 'circle': {
+        const radius = Math.min(geometry.width, geometry.height) / 2;
+        entry.shape.circle(geometry.width / 2, geometry.height / 2, radius);
+        break;
+      }
+      case 'ellipse':
+        entry.shape.ellipse(
+          geometry.width / 2,
+          geometry.height / 2,
+          geometry.width / 2,
+          geometry.height / 2,
+        );
+        break;
+      case 'rectangle':
+      default:
+        entry.shape.rect(0, 0, geometry.width, geometry.height);
+        break;
+    }
+
+    // Image fills currently support rectangles only; non-rectangular
+    // geometry keeps its status fill until shape masking is introduced.
+    entry.shape.fill({
+      color: style.fill,
+      alpha: hasImage && geometry.type === 'rectangle' ? 0 : (style.fillAlpha ?? 1),
+    });
 
     if (style.strokeWidth) {
       entry.shape.stroke({ color: style.stroke ?? style.fill, width: style.strokeWidth });
@@ -752,24 +777,7 @@ export class SpaceRenderer {
     entry.label.position.set(width / 2, height / 2);
   }
 
-  /** Draws a liquid-glass surface over booths receded by an active filter. */
-  /**
-   * Applies focus to booth content only. The liquid-glass overlay stays
-   * crisp, while the fill/image/label recede together.
-   */
-  private applyContentFocus(entry: SpaceNode, recede: boolean): void {
-    const filters = recede ? [this.contentBlurFilter] : [];
-
-    entry.shape.filters = filters;
-    entry.label.filters = filters;
-    entry.checkBadge.filters = filters;
-    entry.handle.filters = filters;
-
-    if (entry.image) {
-      entry.image.sprite.filters = filters;
-    }
-  }
-
+  /** Draws a liquid-glass surface matching the receded vector geometry. */
   private drawGlass(glass: Graphics, geometry: Space['geometry']): void {
     const { width, height } = geometry;
 
@@ -777,58 +785,71 @@ export class SpaceRenderer {
 
     if (width <= 2 || height <= 2) return;
 
-    // The radius scales with the booth but stays conservative so the
-    // overlay still respects small/compact booth geometry.
     const radius = Math.min(12, Math.max(4, Math.min(width, height) * 0.12));
     const inset = 1.5;
 
-    // 1) Translucent liquid body — keeps the original booth/status visible.
-    glass
-      .roundRect(0, 0, width, height, radius)
-      .fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA });
+    const drawShape = (pad: number, inner = false): void => {
+      const w = Math.max(0, width - pad * 2);
+      const h = Math.max(0, height - pad * 2);
 
-    glass
-      .roundRect(inset, inset, width - inset * 2, height - inset * 2, Math.max(2, radius - 1))
-      .fill({ color: FILTER_GLASS_BODY_COLOR, alpha: FILTER_GLASS_BODY_ALPHA });
+      switch (geometry.type) {
+        case 'circle': {
+          const r = Math.min(w, h) / 2;
+          glass.circle(pad + w / 2, pad + h / 2, r);
+          break;
+        }
+        case 'ellipse':
+          glass.ellipse(pad + w / 2, pad + h / 2, w / 2, h / 2);
+          break;
+        case 'rectangle':
+        default:
+          glass.roundRect(
+            pad,
+            pad,
+            w,
+            h,
+            inner ? Math.max(2, radius - 3) : radius,
+          );
+          break;
+      }
+    };
 
-    // 2) Bright outer rim — the main "light catching" glass cue.
-    glass
-      .roundRect(0.5, 0.5, width - 1, height - 1, radius)
-      .stroke({ color: FILTER_GLASS_RIM_COLOR, width: 1.6, alpha: FILTER_GLASS_RIM_ALPHA });
+    drawShape(0);
+    glass.fill({ color: FILTER_GLASS_TINT_COLOR, alpha: FILTER_GLASS_TINT_ALPHA });
 
-    // 3) Soft inner rim adds lens/depth separation without blur.
-    glass
-      .roundRect(3, 3, Math.max(0, width - 6), Math.max(0, height - 6), Math.max(2, radius - 3))
-      .stroke({
+    drawShape(inset, true);
+    glass.fill({ color: FILTER_GLASS_BODY_COLOR, alpha: FILTER_GLASS_BODY_ALPHA });
+
+    drawShape(0);
+    glass.stroke({
+      color: FILTER_GLASS_RIM_COLOR,
+      width: 1.6,
+      alpha: FILTER_GLASS_RIM_ALPHA,
+    });
+
+    drawShape(3, true);
+    glass.stroke({
+      color: FILTER_GLASS_RIM_COLOR,
+      width: 1,
+      alpha: FILTER_GLASS_INNER_RIM_ALPHA,
+    });
+
+    // Keep the specular highlight deliberately simple and uncluttered.
+    if (width > 8 && height > 8) {
+      const shineLength = Math.min(width * 0.42, 110);
+      if (geometry.type === 'circle') {
+        const r = Math.min(width, height) / 2;
+        glass.arc(width / 2, height / 2, Math.max(0, r - 2), Math.PI * 1.1, Math.PI * 1.85);
+      } else {
+        glass
+          .moveTo(radius * 0.55, 1.5)
+          .lineTo(Math.min(width - radius, radius * 0.55 + shineLength), 1.5);
+      }
+      glass.stroke({
         color: FILTER_GLASS_RIM_COLOR,
-        width: 1,
-        alpha: FILTER_GLASS_INNER_RIM_ALPHA,
+        width: 1.4,
+        alpha: FILTER_GLASS_SPECULAR_ALPHA,
       });
-
-    // 4) Darker lower/right edge gives the surface a dimensional boundary.
-    glass
-      .moveTo(radius, height - 1)
-      .lineTo(width - radius, height - 1)
-      .moveTo(width - 1, radius)
-      .lineTo(width - 1, height - radius)
-      .stroke({
-        color: FILTER_GLASS_DARK_RIM_COLOR,
-        width: 1.25,
-        alpha: FILTER_GLASS_DARK_RIM_ALPHA,
-      });
-
-    // 5) Specular highlight along the upper-left edge, inspired by liquid
-    // glass / lens reflections. Keep it short so booth names remain clear.
-    const shineLength = Math.min(width * 0.42, 110);
-    if (shineLength > 8) {
-      glass
-        .moveTo(radius * 0.55, 1.5)
-        .lineTo(Math.min(width - radius, radius * 0.55 + shineLength), 1.5)
-        .stroke({
-          color: FILTER_GLASS_RIM_COLOR,
-          width: 1.4,
-          alpha: FILTER_GLASS_SPECULAR_ALPHA,
-        });
     }
   }
 
@@ -868,7 +889,7 @@ export class SpaceRenderer {
     const url =
       typeof space.properties.imageUrl === 'string' ? space.properties.imageUrl : undefined;
 
-    if (!url) {
+    if (!url || space.geometry.type !== 'rectangle') {
       if (entry.image) {
         entry.image.sprite.destroy();
         entry.image = undefined;
