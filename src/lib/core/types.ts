@@ -86,6 +86,8 @@ export interface SpaceProperties {
   status?: SpaceStatus;
   /** Prop kind for a non-booth map element. Infrastructure concepts are props. */
   propKind?: SpacePropKind;
+  /** Custom hex color for prop/infrastructure vector elements (for example "#4ade80"). */
+  propColor?: string;
   /** Rendered as an image fill on top of the status color when set. */
   imageUrl?: string;
   [key: string]: unknown;
