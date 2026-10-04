@@ -218,16 +218,31 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
             <div class="search-panel-header">
               <div>
                 <strong>Find a booth</strong>
-                <span>{{ searchableBooths().length }} booths</span>
+                @if (searchListOpen()) {
+                  <span>{{ searchableBooths().length }} booths</span>
+                }
               </div>
-              @if (searchQuery()) {
+
+              <div class="search-panel-actions">
+                @if (searchQuery()) {
+                  <button
+                    type="button"
+                    class="search-clear-btn"
+                    (click)="clearSearch()"
+                    aria-label="Clear search"
+                  >×</button>
+                }
                 <button
                   type="button"
-                  class="search-clear-btn"
-                  (click)="clearSearch()"
-                  aria-label="Clear search"
-                >×</button>
-              }
+                  class="search-collapse-btn"
+                  (click)="toggleSearchList()"
+                  [attr.aria-expanded]="searchListOpen()"
+                  [attr.aria-label]="searchListOpen() ? 'Collapse booth list' : 'Expand booth list'"
+                  [title]="searchListOpen() ? 'Collapse booth list' : 'Show booth list'"
+                >
+                  <span [class.collapsed]="!searchListOpen()">⌄</span>
+                </button>
+              </div>
             </div>
 
             <label class="search-box">
@@ -241,44 +256,46 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
               />
             </label>
 
-            @if (searchQuery()) {
-              <div class="search-summary">
-                {{ searchResults().length }} matching {{ searchResults().length === 1 ? 'booth' : 'booths' }}
-              </div>
-            } @else {
-              <div class="search-summary">Browse all bookable spaces</div>
-            }
-
-            <div class="search-table-head" aria-hidden="true">
-              <span>BOOTH</span>
-              <span>NAME</span>
-              <span>STATUS</span>
-            </div>
-            <div class="search-results" role="list">
-              @for (space of searchResults(); track space.id) {
-                <button
-                  type="button"
-                  class="search-result"
-                  [class.selected]="searchHighlightedId() === space.id || selectedIds().includes(space.id)"
-                  (click)="openSearchResult(space.id)"
-                  role="listitem"
-                >
-                  <span class="search-result-id">{{ searchDisplayName(space) }}</span>
-                  <span class="search-result-name">{{ searchLongName(space) }}</span>
-                  <span
-                    class="search-result-status"
-                    [style.background]="statusColor(space.properties.status)"
-                  >
-                    {{ statusLabel(space.properties.status) }}
-                  </span>
-                </button>
-              } @empty {
-                <div class="search-empty">
-                  <strong>No booths found</strong>
-                  <span>Try a booth ID, name or status.</span>
+            @if (searchListOpen()) {
+              @if (searchQuery()) {
+                <div class="search-summary">
+                  {{ searchResults().length }} matching {{ searchResults().length === 1 ? 'booth' : 'booths' }}
                 </div>
+              } @else {
+                <div class="search-summary">Browse all bookable spaces</div>
               }
-            </div>
+
+              <div class="search-table-head" aria-hidden="true">
+                <span>BOOTH</span>
+                <span>NAME</span>
+                <span>STATUS</span>
+              </div>
+              <div class="search-results" role="list">
+                @for (space of searchResults(); track space.id) {
+                  <button
+                    type="button"
+                    class="search-result"
+                    [class.selected]="searchHighlightedId() === space.id || selectedIds().includes(space.id)"
+                    (click)="openSearchResult(space.id)"
+                    role="listitem"
+                  >
+                    <span class="search-result-id">{{ searchDisplayName(space) }}</span>
+                    <span class="search-result-name">{{ searchLongName(space) }}</span>
+                    <span
+                      class="search-result-status"
+                      [style.background]="statusColor(space.properties.status)"
+                    >
+                      {{ statusLabel(space.properties.status) }}
+                    </span>
+                  </button>
+                } @empty {
+                  <div class="search-empty">
+                    <strong>No booths found</strong>
+                    <span>Try a booth ID, name or status.</span>
+                  </div>
+                }
+              </div>
+            }
           </aside>
         }
 
@@ -851,6 +868,39 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
       .search-panel-header span {
         color: #7f8794;
         font-size: 11px;
+      }
+
+      .search-panel-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .search-collapse-btn {
+        width: 28px;
+        height: 28px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.04);
+        color: #aab1bd;
+      }
+
+      .search-collapse-btn:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+
+      .search-collapse-btn span {
+        font-size: 14px;
+        line-height: 1;
+        transform: translateY(-1px);
+        transition: transform 0.16s ease;
+      }
+
+      .search-collapse-btn span.collapsed {
+        transform: rotate(-90deg) translateX(1px);
       }
 
       .search-clear-btn {
@@ -1652,6 +1702,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   protected readonly isAdding = signal(false);
   protected readonly searchQuery = signal('');
   protected readonly searchHighlightedId = signal<string | null>(null);
+  protected readonly searchListOpen = signal(true);
 
   protected readonly searchableBooths = computed(() =>
     this.searchableSpaces().filter((space) => space.type === 'booth'),
@@ -2083,6 +2134,10 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       this.engine.setVisualFilter({ type: 'status', status: kind });
     }
     this.filterChange.emit(kind);
+  }
+
+  protected toggleSearchList(): void {
+    this.searchListOpen.update((open) => !open);
   }
 
   protected clearSearch(): void {
