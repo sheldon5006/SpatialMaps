@@ -53,8 +53,8 @@ export const DEFAULT_SPATIAL_MAP_SETTINGS: SpatialMapSettings = {
   },
   focus: {
     enabled: true,
-    durationMs: 2000,
-    color: '#111827',
+    durationMs: 1500,
+    color: '#ff8a00',
   },
 };
 
