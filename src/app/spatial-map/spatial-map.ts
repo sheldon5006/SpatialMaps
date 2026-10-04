@@ -1603,6 +1603,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
   @Output() readonly filterChange = new EventEmitter<'all' | SpaceStatus | 'selected'>();
   @Output() readonly spaceTransform = new EventEmitter<{ id: string; geometry: Space['geometry'] }>();
   @Output() readonly spacesChange = new EventEmitter<Space[]>();
+  @Output() readonly searchResultClick = new EventEmitter<string>();
   @Output() readonly ready = new EventEmitter<void>();
 
   @ViewChild('host', { static: true }) hostRef!: ElementRef<HTMLDivElement>;
@@ -2039,6 +2040,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
       maxZoom: 1.8,
       duration: 450,
     });
+    this.searchResultClick.emit(id);
   }
 
   /** Programmatic search helper for surrounding Angular code. */
