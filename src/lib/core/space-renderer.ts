@@ -85,6 +85,7 @@ const HIGHLIGHT_OUTER_MIN_ALPHA = 0.16;
 const HIGHLIGHT_OUTER_MAX_ALPHA = 0.42;
 const HIGHLIGHT_MID_MIN_ALPHA = 0.22;
 const HIGHLIGHT_MID_MAX_ALPHA = 0.58;
+const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0xa855f7;
 
 export interface CameraSnapshot {
   x: number;
@@ -191,6 +192,9 @@ export class SpaceRenderer {
   private hoveredId: string | null = null;
   private focusedId: string | null = null;
   private searchHighlightedId: string | null = null;
+  private focusHighlightedId: string | null = null;
+  private focusHighlightUntil = 0;
+  private focusHighlightColor = DEFAULT_FOCUS_HIGHLIGHT_COLOR;
   private highlightPulseTime = 0;
   private readonly selectedIds = new Set<string>();
   private selectionRule: SelectionRule = DEFAULT_SELECTION_RULE;
@@ -362,22 +366,62 @@ export class SpaceRenderer {
     if (id) this.repaint(id);
   }
 
+  /**
+   * Temporarily focuses one space while a navigation/fly-to operation is
+   * taking place. The visual state is separate from selection/business state.
+   */
+  focusSpace(
+    id: string,
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    const durationMs = Math.max(0, options?.durationMs ?? 2000);
+    this.focusHighlightedId = id;
+    this.focusHighlightUntil = performance.now() + durationMs;
+    this.focusHighlightColor = this.parsePropColor(
+      options?.color,
+      DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+    );
+    this.repaint(id);
+  }
+
   /** Drives the soft locator pulse used by search results and selections. */
   tick(deltaMS: number): void {
-    if (this.searchHighlightedId === null && this.selectedIds.size === 0) return;
+    const now = performance.now();
+    const focusWasActive = this.focusHighlightedId !== null && now < this.focusHighlightUntil;
+
+    if (this.focusHighlightedId !== null && !focusWasActive) {
+      const expired = this.focusHighlightedId;
+      this.focusHighlightedId = null;
+      this.focusHighlightUntil = 0;
+      this.repaint(expired);
+    }
+
+    if (this.searchHighlightedId === null && this.focusHighlightedId === null && this.selectedIds.size === 0) return;
 
     this.highlightPulseTime += deltaMS;
     const pulse = 0.5 + 0.5 * Math.sin(this.highlightPulseTime * HIGHLIGHT_PULSE_SPEED);
     const touched = new Set<string>();
 
     if (this.searchHighlightedId) touched.add(this.searchHighlightedId);
+    if (this.focusHighlightedId) touched.add(this.focusHighlightedId);
     this.selectedIds.forEach((id) => touched.add(id));
 
     touched.forEach((id) => {
       const entry = this.spaceNodes.get(id);
       const space = this.spaceData.get(id);
       if (!entry || !space) return;
-      this.drawSearchHighlight(entry.searchHighlight, space.geometry, pulse, this.selectedIds.has(id));
+
+      const isSelected = this.selectedIds.has(id);
+      const isFocus = this.focusHighlightedId === id && performance.now() < this.focusHighlightUntil;
+      const isSearch = this.searchHighlightedId === id;
+
+      this.drawSearchHighlight(
+        entry.searchHighlight,
+        space.geometry,
+        pulse,
+        isSelected || isFocus || isSearch,
+        isFocus ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+      );
     });
   }
 
@@ -1157,9 +1201,17 @@ export class SpaceRenderer {
     entry.checkBadge.visible = this.selectedIds.has(space.id);
 
     const isSearchHighlighted = this.searchHighlightedId === space.id;
+    const isFocusHighlighted = this.focusHighlightedId === space.id &&
+      performance.now() < this.focusHighlightUntil;
     const isSelected = this.selectedIds.has(space.id);
-    this.drawSearchHighlight(entry.searchHighlight, geometry, 0.5, isSelected || isSearchHighlighted);
-    entry.searchHighlight.visible = isSelected || isSearchHighlighted;
+    this.drawSearchHighlight(
+      entry.searchHighlight,
+      geometry,
+      0.5,
+      isSelected || isSearchHighlighted || isFocusHighlighted,
+      isFocusHighlighted ? this.focusHighlightColor : DEFAULT_FOCUS_HIGHLIGHT_COLOR,
+    );
+    entry.searchHighlight.visible = isSelected || isSearchHighlighted || isFocusHighlighted;
 
     this.drawHandle(entry.handle, geometry);
     const showEditorHandles = this.mode === 'edit' && this.selectedIds.has(space.id);
@@ -1337,12 +1389,13 @@ export class SpaceRenderer {
     }
   }
 
-  /** Draws the animated backlight used for search and selection. */
+  /** Draws a smooth layered glow used by search, fly-to focus and selection. */
   private drawSearchHighlight(
     highlight: Graphics,
     geometry: Space['geometry'],
     pulse = 0.5,
     active = true,
+    color = DEFAULT_FOCUS_HIGHLIGHT_COLOR,
   ): void {
     highlight.clear();
 
@@ -1352,66 +1405,79 @@ export class SpaceRenderer {
     const minSide = Math.min(width, height);
     if (width <= 2 || height <= 2) return;
 
-    const outerAlpha =
-      HIGHLIGHT_OUTER_MIN_ALPHA +
-      (HIGHLIGHT_OUTER_MAX_ALPHA - HIGHLIGHT_OUTER_MIN_ALPHA) * pulse;
-    const midAlpha =
-      HIGHLIGHT_MID_MIN_ALPHA +
-      (HIGHLIGHT_MID_MAX_ALPHA - HIGHLIGHT_MID_MIN_ALPHA) * pulse;
-
-    const outerPad = 14 + pulse * 5;
-    const outerW = width + outerPad * 2;
-    const outerH = height + outerPad * 2;
-    const radius = Math.min(18, Math.max(8, minSide * 0.14));
-
-    // Wide soft bloom behind the booth.
-    highlight.roundRect(-outerPad, -outerPad, outerW, outerH, radius);
-    highlight.fill({
-      color: SEARCH_HIGHLIGHT_GLOW_COLOR,
-      alpha: outerAlpha,
-    });
-
-    const midPad = 7 + pulse * 2;
-    const midW = width + midPad * 2;
-    const midH = height + midPad * 2;
-    highlight.roundRect(-midPad, -midPad, midW, midH, Math.min(16, radius));
-    highlight.fill({
-      color: SEARCH_HIGHLIGHT_GLOW_COLOR,
-      alpha: midAlpha,
-    });
-
-    // Crisp luminous rim makes the target obvious without recoloring the booth.
-    const corePad = 3;
-    const coreW = width + corePad * 2;
-    const coreH = height + corePad * 2;
+    // Several translucent layers with increasing blur approximate a smooth
+    // gradient bloom while keeping the core geometry razor sharp.
+    const outerPad = 19 + pulse * 6;
+    const outerRadius = Math.min(22, Math.max(9, minSide * 0.16));
     highlight.roundRect(
-      -corePad,
-      -corePad,
-      coreW,
-      coreH,
-      Math.min(12, radius),
+      -outerPad,
+      -outerPad,
+      width + outerPad * 2,
+      height + outerPad * 2,
+      outerRadius,
     );
-    highlight.stroke({
-      color: SEARCH_HIGHLIGHT_CORE_COLOR,
-      alpha: SEARCH_HIGHLIGHT_CORE_ALPHA,
-      width: 2.5 + pulse * 0.8,
+    highlight.fill({
+      color,
+      alpha: 0.10 + pulse * 0.12,
     });
 
-    // Small directional "sweep" catches the eye during search navigation.
-    const sweep = Math.max(18, Math.min(width * 0.34, 86));
-    highlight.moveTo(
-      -width / 2 + width * 0.18,
-      -height / 2 - 2,
+    const midPad = 11 + pulse * 3;
+    highlight.roundRect(
+      -midPad,
+      -midPad,
+      width + midPad * 2,
+      height + midPad * 2,
+      Math.min(18, outerRadius),
     );
-    highlight.lineTo(
-      -width / 2 + width * 0.18 + sweep,
-      -height / 2 - 2,
+    highlight.fill({
+      color,
+      alpha: 0.16 + pulse * 0.18,
+    });
+
+    const innerPad = 5;
+    highlight.roundRect(
+      -innerPad,
+      -innerPad,
+      width + innerPad * 2,
+      height + innerPad * 2,
+      Math.min(13, outerRadius),
+    );
+    highlight.fill({
+      color,
+      alpha: 0.10 + pulse * 0.10,
+    });
+
+    // Luminous ring: slightly purple in focus/selection, white core keeps
+    // the booth readable regardless of its status color.
+    highlight.roundRect(
+      -2,
+      -2,
+      width + 4,
+      height + 4,
+      Math.min(12, outerRadius),
     );
     highlight.stroke({
-      color: SEARCH_HIGHLIGHT_CORE_COLOR,
-      alpha: 0.38 + pulse * 0.34,
-      width: 2,
-      cap: 'round',
+      color: 0xffffff,
+      alpha: 0.84 + pulse * 0.10,
+      width: 2.4 + pulse * 0.9,
+    });
+
+    // Soft moving sweep gives the light a polished "scan" motion.
+    const sweepWidth = Math.max(24, Math.min(width * 0.42, 100));
+    const sweepX = -width / 2 + (-sweepWidth + (width + sweepWidth) * pulse);
+    highlight.moveTo(sweepX, -height / 2 - 3);
+    highlight.lineTo(sweepX + sweepWidth, -height / 2 - 3);
+    highlight.stroke({
+      color: 0xffffff,
+      alpha: 0.20 + pulse * 0.35,
+      width: 1.8,
+    });
+
+    // Add a small center bloom so the focus reads as light, not as a border.
+    highlight.circle(width / 2, height / 2, Math.max(3, Math.min(10, minSide * 0.05)));
+    highlight.fill({
+      color,
+      alpha: 0.04 + pulse * 0.05,
     });
   }
 
