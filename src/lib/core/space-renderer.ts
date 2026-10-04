@@ -22,6 +22,7 @@ import {
 const HOVER_STROKE_COLOR = 0xffffff;
 const HOVER_STROKE_WIDTH = 2;
 const SELECTED_STROKE_WIDTH = 3;
+const SELECTED_COLOR = 0x3498db;
 
 const CHECK_BADGE_RADIUS = 8;
 const CHECK_BADGE_MARGIN = 6;
@@ -1370,7 +1371,7 @@ export class SpaceRenderer {
   private drawCheckBadge(badge: Graphics, geometry: Space['geometry']): void {
     const cx = geometry.width - CHECK_BADGE_MARGIN - CHECK_BADGE_RADIUS;
     const cy = CHECK_BADGE_MARGIN + CHECK_BADGE_RADIUS;
-    const fill = this.statusStyles.selected?.fill ?? DEFAULT_STATUS_STYLES.selected.fill;
+    const fill = SELECTED_COLOR;
 
     badge
       .clear()
@@ -1458,10 +1459,9 @@ export class SpaceRenderer {
     const isSelected = this.selectedIds.has(id);
 
     if (isSelected) {
-      const selectedStyle = this.statusStyles.selected ?? DEFAULT_STATUS_STYLES.selected;
       return {
         ...base,
-        stroke: selectedStyle.fill,
+        stroke: SELECTED_COLOR,
         strokeWidth: SELECTED_STROKE_WIDTH,
       };
     }
