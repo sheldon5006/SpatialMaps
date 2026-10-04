@@ -16,20 +16,6 @@ export type SpaceStatus =
 export type SpaceElementType = 'booth' | 'prop';
 
 /** Basic infrastructure/prop vocabulary for venue and market maps. */
-export type SpacePropKind =
-  | 'road'
-  | 'path'
-  | 'building'
-  | 'parking'
-  | 'entrance'
-  | 'garden'
-  | 'tree'
-  | 'bench'
-  | 'seating'
-  | 'toilet'
-  | 'garbage-bin'
-  | 'information';
-
 interface BaseGeometry {
   x: number;
   y: number;
@@ -84,8 +70,6 @@ export type SpaceGeometry =
 export interface SpaceProperties {
   name?: string;
   status?: SpaceStatus;
-  /** Prop kind for a non-booth map element. Infrastructure concepts are props. */
-  propKind?: SpacePropKind;
   /** Custom hex color for prop/infrastructure vector elements (for example "#4ade80"). */
   propColor?: string;
   /** Rendered as an image fill on top of the status color when set. */
