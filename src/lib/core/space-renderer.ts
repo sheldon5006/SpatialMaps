@@ -534,14 +534,18 @@ export class SpaceRenderer {
         0x00b7ff,
       );
 
+      // Explicit visibility split: the temporary fly-to layer is removed
+      // exactly when the timer ends, while search/selection remains separate.
+      entry.focusHighlight.visible = isFocus;
+      entry.searchHighlight.visible = !isFocus && (isSelected || isSearch);
+      entry.pressShadow.visible = visible;
+
       // Keep the tiny physical press only while the one-shot transition runs.
       // Once settled, selected/search-highlighted spaces stay still while
       // the perimeter rope continues its calm loop.
-        entry.node.scale.set(
+      entry.node.scale.set(
         1 - (1 - SELECTED_SCALE) * press,
       );
-      entry.searchHighlight.visible = visible;
-      entry.pressShadow.visible = visible;
     });
   }
 
