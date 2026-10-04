@@ -79,7 +79,6 @@ const SEARCH_HIGHLIGHT_SHADOW_COLOR = 0x111827;
 const SEARCH_HIGHLIGHT_DEEP_SHADOW_COLOR = 0x020617;
 
 const PRESS_ANIMATION_DURATION_MS = 220;
-const HIGHLIGHT_FOCUS_FADE_MS = 320;
 const DEFAULT_FOCUS_HIGHLIGHT_COLOR = 0x111827;
 
 export interface CameraSnapshot {
@@ -457,7 +456,7 @@ export class SpaceRenderer {
       const visible = isSelected || isSearch || isFocus;
 
       const focusIntensity = isFocus && !isSelected && !isSearch
-        ? Math.min(1, Math.max(0, focusRemaining / HIGHLIGHT_FOCUS_FADE_MS))
+        ? 1
         : 1;
 
       this.drawPressShadow(
@@ -474,6 +473,7 @@ export class SpaceRenderer {
         focusIntensity,
         this.highlightRopePhase,
         isFocus ? 0xff8a00 : 0x183a5a,
+        isFocus ? 0x00b7ff : 0xd5d9de,
       );
 
       // Keep the tiny physical press only while the one-shot transition runs.
@@ -1322,6 +1322,7 @@ export class SpaceRenderer {
       1,
       this.highlightRopePhase,
       isFocusHighlighted ? 0xff8a00 : 0x183a5a,
+      isFocusHighlighted ? 0x00b7ff : 0xd5d9de,
     );
     entry.searchHighlight.visible = initiallyVisible;
     entry.pressShadow.visible = initiallyVisible;
@@ -1562,6 +1563,7 @@ export class SpaceRenderer {
     intensity = 1,
     ropePhase = 0,
     primaryColor = 0x183a5a,
+    secondaryColor = 0xd5d9de,
   ): void {
     rope.clear();
 
@@ -1763,7 +1765,7 @@ export class SpaceRenderer {
       rope.moveTo(x1, y1);
       rope.lineTo(x2, y2);
       rope.stroke({
-        color: index % 2 === 0 ? primaryColor : 0xd5d9de,
+        color: index % 2 === 0 ? primaryColor : secondaryColor,
         alpha: 1.0 * strength,
         width: Math.max(2.1, ropeWidth * 0.70),
         cap: 'round',
