@@ -55,7 +55,7 @@ export class SpatialMapEngine {
   private pointerInteraction: PointerInteraction | null = null;
   private transitions: CameraTransitions | null = null;
   private renderer: SpaceRenderer | null = null;
-  private camera: Camera | null = null;
+  private cameraEngine: Camera | null = null;
   private theme: MapTheme = DEFAULT_SPATIAL_MAP_SETTINGS.theme;
   private cameraLimits = {
     minZoom: DEFAULT_SPATIAL_MAP_SETTINGS.zoom.minZoom,
@@ -115,7 +115,7 @@ export class SpatialMapEngine {
     app.stage.addChild(this.world);
 
     const cameraEngine = new Camera(this.world, this.cameraLimits);
-    this.camera = cameraEngine;
+    this.cameraEngine = cameraEngine;
     this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.getState());
     this.renderer.setTheme(this.theme);
     this.transitions = new CameraTransitions(app, cameraEngine, (ids) =>
@@ -244,7 +244,7 @@ export class SpatialMapEngine {
 
   /** Returns the current camera transform for nearest-match search logic. */
   getCameraState(): { x: number; y: number; zoom: number } {
-    return this.camera?.getState() ?? { x: 0, y: 0, zoom: 1 };
+    return this.cameraEngine?.getState() ?? { x: 0, y: 0, zoom: 1 };
   }
 
   setVisualFilter(filter: VisualFilter): void {
@@ -390,7 +390,7 @@ export class SpatialMapEngine {
     this.pointerInteraction = null;
     this.transitions = null;
     this.renderer = null;
-    this.camera = null;
+    this.cameraEngine = null;
     this.world = null;
 
     this.app?.destroy(true, { children: true, texture: true });
