@@ -199,15 +199,26 @@ export class SpatialMapEngine {
     this.renderer?.setSelectionRule(rule);
   }
 
+  setSearchHighlights(ids: string[]): void {
+    this.renderer?.setSearchHighlights(ids);
+  }
+
   setSearchHighlight(id: string | null): void {
-    this.renderer?.setSearchHighlight(id);
+    this.setSearchHighlights(id ? [id] : []);
+  }
+
+  focusSpaces(
+    ids: string[],
+    options?: { durationMs?: number; color?: string },
+  ): void {
+    this.renderer?.focusSpaces(ids, options);
   }
 
   focusSpace(
     id: string,
     options?: { durationMs?: number; color?: string },
   ): void {
-    this.renderer?.focusSpace(id, options);
+    this.focusSpaces([id], options);
   }
 
   isSelectable(id: string): boolean {
