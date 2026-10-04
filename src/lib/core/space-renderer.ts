@@ -308,6 +308,8 @@ export class SpaceRenderer {
   /** Overrides the default fill/stroke used per status. */
   setStatusStyles(styles: StatusStyleMap): void {
     this.statusStyles = { ...DEFAULT_STATUS_STYLES, ...styles };
+    this.spaceData.forEach((space, id) => this.repaint(id));
+    this.updateFocusEffect();
   }
 
   /** Overrides which spaces can be selected — status/business truth is the
