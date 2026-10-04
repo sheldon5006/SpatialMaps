@@ -13,6 +13,7 @@ export {
 export type {
   SpatialMapGridSettings,
   SpatialMapSearchSettings,
+  SpatialMapFocusSettings,
   SpatialMapSettings,
   SpatialMapSettingsPatch,
   SpatialMapZoomSettings,
