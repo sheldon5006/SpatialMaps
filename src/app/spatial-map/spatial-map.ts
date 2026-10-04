@@ -14,6 +14,7 @@ import { MapMode, SpatialMapEngine } from '../../lib/core/spatial-map-engine';
 import {
   Space,
   SpaceElementType,
+  MapTheme,
   SpaceGeometry,
   SpaceStatus,
 } from '../../lib/core/types';
@@ -175,6 +176,14 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
             <span class="plus">+</span> Add space
           </button>
         }
+        @if (mode() === 'edit') {
+          <button class="icon-btn" [class.active]="gridEnabled()" (click)="toggleGrid()">
+            Grid
+          </button>
+        }
+        <button class="icon-btn" [class.active]="settingsOpen()" (click)="settingsOpen.set(!settingsOpen())">
+          Map settings
+        </button>
         <div class="toolbar-spacer"></div>
         <button class="icon-btn" (click)="devToolsOpen.set(!devToolsOpen())" title="Dev tools">
           Dev tools
@@ -183,6 +192,67 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
 
       <div class="canvas-area">
         <div #host class="spatial-map-host"></div>
+
+        @if (settingsOpen()) {
+          <div class="settings-panel">
+            <div class="settings-header">
+              <strong>Map settings</strong>
+              <button class="icon-btn" (click)="settingsOpen.set(false)">Close</button>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">Canvas</span>
+              <div class="mode-switch">
+                <button [class.active]="mapTheme() === 'light'" (click)="setMapTheme('light')">Light</button>
+                <button [class.active]="mapTheme() === 'dark'" (click)="setMapTheme('dark')">Dark</button>
+              </div>
+            </div>
+
+            <div class="settings-section">
+              <span class="settings-label">View zoom</span>
+              <div class="settings-grid">
+                <label>
+                  <span>Min readable</span>
+                  <input type="number" min="0.1" max="3" step="0.05" [(ngModel)]="viewMinZoom" />
+                </label>
+                <label>
+                  <span>Base</span>
+                  <input type="number" min="0.1" max="4" step="0.05" [(ngModel)]="viewBaseZoom" />
+                </label>
+                <label>
+                  <span>Max</span>
+                  <input type="number" min="0.2" max="6" step="0.05" [(ngModel)]="viewMaxZoom" />
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button class="preset-btn" (click)="applyViewZoomSettings()">Apply limits</button>
+                <button class="preset-btn" (click)="resetViewZoom()">Reset to base</button>
+              </div>
+              <small class="settings-help">View mode will never zoom below the readable minimum.</small>
+            </div>
+
+            @if (mode() === 'edit') {
+              <div class="settings-section">
+                <span class="settings-label">Edit grid</span>
+                <label class="toggle-option">
+                  <input type="checkbox" [(ngModel)]="gridEnabled" (ngModelChange)="toggleGrid()" />
+                  <span>Show layout grid</span>
+                </label>
+                <div class="grid-size-row">
+                  <span>Grid size</span>
+                  @for (size of gridSizes; track size) {
+                    <button
+                      type="button"
+                      class="preset-btn"
+                      [class.active]="gridSize === size"
+                      (click)="setGridSize(size)"
+                    >{{ size }} px</button>
+                  }
+                </div>
+              </div>
+            }
+          </div>
+        }
 
         <!-- Hover preview chip -->
         @if (hoverPreview(); as preview) {
@@ -572,6 +642,84 @@ const EDIT_DRAWER_PADDING = { top: 24, right: 320, bottom: 24, left: 24 };
         text-transform: capitalize;
       }
 
+      /* ---- Map settings ---------------------------------------------- */
+
+      .settings-panel {
+        position: absolute;
+        top: 10px;
+        right: 12px;
+        z-index: 20;
+        width: 310px;
+        max-height: calc(100% - 20px);
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 16px;
+        border-radius: 12px;
+        background: rgba(18, 20, 26, 0.96);
+        border: 1px solid rgba(255, 255, 255, 0.10);
+        box-shadow: 0 18px 50px rgba(0, 0, 0, 0.30);
+      }
+
+      .settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #e8eaf0;
+      }
+
+      .settings-section {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .settings-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #7f8794;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .settings-grid label {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: #9a9fab;
+        font-size: 11px;
+      }
+
+      .settings-grid input {
+        width: 100%;
+        box-sizing: border-box;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 7px;
+        color: #e8eaf0;
+        padding: 7px 8px;
+        font: inherit;
+      }
+
+      .settings-actions,
+      .grid-size-row {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+
+      .settings-help {
+        color: #6f7681;
+        line-height: 1.35;
+      }
+
       /* ---- Inspector drawer (contextual, right side) ---- */
 
       .inspector-drawer {
@@ -942,6 +1090,9 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly lastTransform = signal<string | null>(null);
   protected readonly mode = signal<MapMode>('view');
   protected readonly visualFilter = signal<'all' | SpaceStatus | 'selected'>('all');
+  protected readonly mapTheme = signal<MapTheme>('light');
+  protected readonly settingsOpen = signal(false);
+  protected readonly gridEnabled = signal(true);
   protected readonly statusMeta = STATUS_META;
   protected readonly devToolsOpen = signal(false);
   protected readonly editingId = signal<string | null>(null);
@@ -953,6 +1104,11 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   protected readonly vectorShapeOptions = VECTOR_SHAPE_OPTIONS;
   protected readonly elementTypeOptions = ELEMENT_TYPE_OPTIONS;
   protected readonly propColorPalette = PROP_COLOR_PALETTE;
+  protected readonly gridSizes = [25, 50, 100] as const;
+  protected viewMinZoom = 0.65;
+  protected viewBaseZoom = 1;
+  protected viewMaxZoom = 2.8;
+  protected gridSize = 50;
   protected form: SpaceFormState = defaultFormState();
 
   private readonly engine = new SpatialMapEngine();
@@ -967,6 +1123,10 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
   ngAfterViewInit(): void {
     this.zone.runOutsideAngular(async () => {
       await this.engine.init(this.hostRef.nativeElement);
+      this.engine.setTheme(this.mapTheme());
+      this.engine.setZoomLimits({ minZoom: this.viewMinZoom, maxZoom: this.viewMaxZoom });
+      this.engine.setGridEnabled(this.gridEnabled());
+      this.engine.setGridSize(this.gridSize);
       this.engine.loadSpaces(TEST_SPACES);
 
       // Hover/select/mode/transform are discrete, low-frequency events
@@ -1023,6 +1183,54 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
 
   protected setMode(mode: MapMode): void {
     this.engine.setMode(mode);
+
+    if (mode === 'view') {
+      this.engine.setZoomLimits({
+        minZoom: this.viewMinZoom,
+        maxZoom: this.viewMaxZoom,
+      });
+      if (this.engine.camera.getZoom() < this.viewMinZoom) {
+        this.engine.camera.setZoom(this.viewMinZoom, { duration: 250 });
+      }
+    } else {
+      // Editor gets a wider range so large maps can be laid out comfortably.
+      this.engine.setZoomLimits({ minZoom: 0.25, maxZoom: 3.5 });
+    }
+  }
+
+  protected setMapTheme(theme: MapTheme): void {
+    this.mapTheme.set(theme);
+    this.engine.setTheme(theme);
+  }
+
+  protected toggleGrid(): void {
+    const enabled = !this.gridEnabled();
+    this.gridEnabled.set(enabled);
+    this.engine.setGridEnabled(enabled);
+  }
+
+  protected setGridSize(size: number): void {
+    this.gridSize = size;
+    this.engine.setGridSize(size);
+  }
+
+  protected applyViewZoomSettings(): void {
+    this.viewMinZoom = Math.max(0.1, Math.min(this.viewMinZoom, this.viewMaxZoom));
+    this.viewBaseZoom = Math.max(this.viewMinZoom, Math.min(this.viewBaseZoom, this.viewMaxZoom));
+    this.viewMaxZoom = Math.max(this.viewBaseZoom, this.viewMaxZoom);
+    this.engine.setZoomLimits({
+      minZoom: this.viewMinZoom,
+      maxZoom: this.viewMaxZoom,
+    });
+
+    if (this.mode() === 'view' && this.engine.camera.getZoom() < this.viewMinZoom) {
+      this.engine.camera.setZoom(this.viewMinZoom, { duration: 250 });
+    }
+  }
+
+  protected resetViewZoom(): void {
+    this.applyViewZoomSettings();
+    this.engine.camera.setZoom(this.viewBaseZoom, { duration: 300 });
   }
 
   protected setVisualFilter(kind: 'all' | SpaceStatus | 'selected'): void {
@@ -1056,7 +1264,11 @@ export class SpatialMap implements AfterViewInit, OnDestroy {
     this.form = {
       name: space.properties.name ?? '',
       status: space.properties.status ?? 'available',
-      elementType: space.type === 'prop' ? 'prop' : 'booth',
+      elementType: space.type === 'prop'
+        ? 'prop'
+        : space.type === 'textbox'
+          ? 'textbox'
+          : 'booth',
       propColor: space.properties.propColor ?? '#64748b',
       propRepresentation: space.properties.imageUrl ? 'image' : 'shape',
       textVisible: space.properties.textVisible === true,
