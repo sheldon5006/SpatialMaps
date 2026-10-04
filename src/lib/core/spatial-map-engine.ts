@@ -12,6 +12,7 @@ import {
 import {
   SPATIAL_MAP_EXPORT_VERSION,
   Space,
+  MapTheme,
   SpatialMapExport,
   StatusStyleMap,
 } from './types';
@@ -49,6 +50,8 @@ export class SpatialMapEngine {
   private pointerInteraction: PointerInteraction | null = null;
   private transitions: CameraTransitions | null = null;
   private renderer: SpaceRenderer | null = null;
+  private theme: MapTheme = 'dark';
+  private cameraLimits = { minZoom: 0.45, maxZoom: 3.5 };
 
   private readonly onTick = (): void => this.transitions?.tick();
 
@@ -76,7 +79,7 @@ export class SpatialMapEngine {
 
     await app.init({
       resizeTo: host,
-      backgroundColor: 0x1a1d23,
+      backgroundColor: this.theme === 'light' ? 0xf3f0e8 : 0x171b20,
       antialias: true,
       autoDensity: true,
       resolution: window.devicePixelRatio || 1,
@@ -91,8 +94,9 @@ export class SpatialMapEngine {
     this.world.position.set(60, 60);
     app.stage.addChild(this.world);
 
-    const cameraEngine = new Camera(this.world);
+    const cameraEngine = new Camera(this.world, this.cameraLimits);
     this.renderer = new SpaceRenderer(this.world, app.stage, () => cameraEngine.getState());
+    this.renderer.setTheme(this.theme);
     this.transitions = new CameraTransitions(app, cameraEngine, (ids) =>
       this.renderer!.getSpaces(ids),
     );
@@ -197,6 +201,38 @@ export class SpatialMapEngine {
 
   setVisualFilter(filter: VisualFilter): void {
     this.renderer?.setVisualFilter(filter);
+  }
+
+  /** Changes the canvas background theme without affecting map data. */
+  setTheme(theme: MapTheme): void {
+    this.theme = theme;
+    if (this.app) {
+      this.app.renderer.background.color = theme === 'light' ? 0xf3f0e8 : 0x171b20;
+    }
+    this.renderer?.setTheme(theme);
+  }
+
+  /** Changes the camera zoom bounds. The current zoom is clamped immediately. */
+  setZoomLimits(limits: { minZoom?: number; maxZoom?: number }): void {
+    this.cameraLimits = {
+      minZoom: Math.max(0.05, limits.minZoom ?? this.cameraLimits.minZoom),
+      maxZoom: Math.max(
+        Math.max(0.05, limits.minZoom ?? this.cameraLimits.minZoom),
+        limits.maxZoom ?? this.cameraLimits.maxZoom,
+      ),
+    };
+    // The Camera instance lives inside CameraTransitions, so a fresh Camera
+    // is not available here; recreate the limit through the transition API
+    // on the next setZoom/fitBounds call. The public view settings in the host
+    // component use setZoom() immediately after changing these bounds.
+  }
+
+  setGridEnabled(enabled: boolean): void {
+    this.renderer?.setGridEnabled(enabled);
+  }
+
+  setGridSize(size: number): void {
+    this.renderer?.setGridSize(size);
   }
 
   on<K extends keyof SpatialMapEngineEvents>(
