@@ -1,3 +1,42 @@
-<app-spatial-map />
+<div class="app-shell">
+  <app-spatial-map />
+
+  <section class="ai-test-panel" aria-label="FlowDesk AI test">
+    <div class="ai-test-header">
+      <div>
+        <span class="eyebrow">FlowDesk AI</span>
+        <h2>Ask the business knowledge base</h2>
+      </div>
+      <span class="connection-badge">SpatialMaps API</span>
+    </div>
+
+    <div class="ai-test-input">
+      <input
+        type="text"
+        [(ngModel)]="aiQuestion"
+        (keydown.enter)="askFlowDeskAi()"
+        placeholder="Ask a question..."
+        [disabled]="aiLoading()"
+      />
+      <button type="button" (click)="askFlowDeskAi()" [disabled]="aiLoading()">
+        {{ aiLoading() ? 'Asking...' : 'Ask AI' }}
+      </button>
+    </div>
+
+    @if (aiAnswer()) {
+      <div class="ai-test-answer">
+        <span>Answer</span>
+        <p>{{ aiAnswer() }}</p>
+      </div>
+    }
+
+    @if (aiError()) {
+      <div class="ai-test-error">
+        <span>Error</span>
+        <p>{{ aiError() }}</p>
+      </div>
+    }
+  </section>
+</div>
 
 <router-outlet />
