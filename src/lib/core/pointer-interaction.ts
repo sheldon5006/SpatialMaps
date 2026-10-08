@@ -105,7 +105,7 @@ export class PointerInteraction {
     this.activePointers.set(event.pointerId, pointer);
     this.onUserInputStart();
 
-    if (this.activePointers.size >= 2 && this.hasTouchLikePointers()) {
+    if (this.activePointers.size >= 2 && this.hasTwoTouchLikePointers()) {
       const [first, second] = this.getTouchLikePointers();
       const center = midpoint(first, second);
 
@@ -131,7 +131,7 @@ export class PointerInteraction {
       active.type = event.pointerType;
     }
 
-    if (this.pinchActive && this.activePointers.size >= 2 && this.hasTouchLikePointers()) {
+    if (this.pinchActive && this.activePointers.size >= 2 && this.hasTwoTouchLikePointers()) {
       const [first, second] = this.getTouchLikePointers();
       const nextDistance = Math.max(1, distance(first, second));
       const nextCenter = midpoint(first, second);
@@ -165,7 +165,7 @@ export class PointerInteraction {
   private readonly onPointerUp = (event: FederatedPointerEvent): void => {
     this.activePointers.delete(event.pointerId);
 
-    if (this.activePointers.size >= 2 && this.hasTouchLikePointers()) {
+    if (this.activePointers.size >= 2 && this.hasTwoTouchLikePointers()) {
       const [first, second] = this.getTouchLikePointers();
       this.pinchActive = true;
       this.isPanning = false;
@@ -175,7 +175,7 @@ export class PointerInteraction {
       return;
     }
 
-    if (this.activePointers.size === 1 && this.hasTouchLikePointers()) {
+    if (this.activePointers.size === 1 && this.getTouchLikePointers().length === 1) {
       const [remaining] = this.getTouchLikePointers();
       this.pinchActive = false;
       this.isPanning = true;
@@ -190,8 +190,8 @@ export class PointerInteraction {
     this.app.stage.cursor = 'grab';
   };
 
-  private hasTouchLikePointers(): boolean {
-    return this.getTouchLikePointers().length >= 1;
+  private hasTwoTouchLikePointers(): boolean {
+    return this.getTouchLikePointers().length >= 2;
   }
 
   private getTouchLikePointers(): ActivePointer[] {
