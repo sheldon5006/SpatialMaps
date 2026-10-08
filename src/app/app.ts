@@ -13,6 +13,10 @@ import { SpatialMap } from './spatial-map/spatial-map';
 export class App {
   private readonly flowDeskAi = inject(FlowDeskAiService);
 
+  // Keep the AI chat hidden by default for the hosted SpatialMaps experience.
+  // Set this to false when the AI panel should be enabled.
+  protected readonly hideAiChat = true;
+
   protected aiQuestion = 'Where are fragile products stored?';
   protected readonly aiAnswer = signal('');
   protected readonly aiLoading = signal(false);
