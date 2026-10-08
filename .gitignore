@@ -1,4 +1,4 @@
-# See https://docs.github.com/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# See https://docs.github.com/get-started/getting-started-with-github-ignore-files for more information.
 
 # Compiled output
 /dist
@@ -10,6 +10,10 @@
 /node_modules
 npm-debug.log
 yarn-error.log
+
+# .NET
+**/bin/
+**/obj/
 
 # IDEs and editors
 .idea/
@@ -42,3 +46,8 @@ __screenshots__/
 # System files
 .DS_Store
 Thumbs.db
+
+# Local environment / secrets
+.env
+.env.*
+!.env.example
