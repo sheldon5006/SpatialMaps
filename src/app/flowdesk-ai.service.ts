@@ -22,15 +22,11 @@ export interface FlowDeskAiResponse {
 })
 export class FlowDeskAiService {
   private readonly http = inject(HttpClient);
-  private readonly apiBaseUrl = 'http://localhost:5060';
 
   ask(message: string, topK = 5): Observable<FlowDeskAiResponse> {
-    return this.http.post<FlowDeskAiResponse>(
-      `${this.apiBaseUrl}/api/ai/chat`,
-      {
-        message,
-        topK,
-      },
-    );
+    return this.http.post<FlowDeskAiResponse>('/api/ai/chat', {
+      message,
+      topK,
+    });
   }
 }
