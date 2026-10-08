@@ -1719,6 +1719,216 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
         font-size: 12px;
         gap: 2px;
       }
+      
+      /* ---- Mobile / touch layout ------------------------------------- */
+      @media (max-width: 700px) {
+        .toolbar {
+          margin: 6px;
+          gap: 6px;
+          padding: 5px;
+          flex-wrap: nowrap;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .toolbar::-webkit-scrollbar {
+          display: none;
+        }
+
+        .toolbar > * {
+          flex: 0 0 auto;
+        }
+
+        .toolbar-spacer {
+          display: none;
+        }
+
+        .mode-switch button,
+        .icon-btn,
+        .add-space-btn,
+        .filter-all-btn {
+          min-height: 40px;
+          padding: 8px 11px;
+        }
+
+        .status-filter-control {
+          flex: 0 0 auto;
+        }
+
+        .status-filter-control > .mode-switch {
+          max-width: 55vw;
+          overflow-x: auto;
+          scrollbar-width: none;
+        }
+
+        .status-filter-control > .mode-switch::-webkit-scrollbar {
+          display: none;
+        }
+
+        .search-panel {
+          top: 8px;
+          left: 8px;
+          right: 8px;
+          width: auto;
+          max-height: calc(100% - 16px);
+          border-radius: 12px;
+        }
+
+        .search-panel-header {
+          padding: 14px 12px 10px;
+        }
+
+        .search-box {
+          min-height: 44px;
+          box-sizing: border-box;
+        }
+
+        .search-result {
+          min-height: 46px;
+          padding: 11px 8px;
+          touch-action: manipulation;
+        }
+
+        .search-results {
+          max-height: 45vh;
+        }
+
+        .search-table-head {
+          grid-template-columns: 52px minmax(0, 1fr) auto;
+          gap: 7px;
+          padding-left: 12px;
+          padding-right: 12px;
+        }
+
+        .search-result {
+          grid-template-columns: 52px minmax(0, 1fr) auto;
+          gap: 6px;
+        }
+
+        .search-result-status {
+          max-width: 72px;
+        }
+
+        .search-adjacent-hover {
+          display: none;
+        }
+
+        .settings-panel {
+          top: 8px;
+          right: 8px;
+          bottom: auto;
+          left: 8px;
+          width: auto;
+          max-height: 72dvh;
+          padding: 14px;
+          border-radius: 12px;
+        }
+
+        .settings-grid input,
+        .status-add-row input[type='text'] {
+          min-height: 40px;
+          box-sizing: border-box;
+        }
+
+        .status-color-input {
+          width: 36px;
+          height: 36px;
+        }
+
+        .status-remove-btn {
+          width: 40px;
+          height: 40px;
+        }
+
+        .status-add-row {
+          grid-template-columns: minmax(0, 1fr) 40px auto;
+        }
+
+        .preset-btn {
+          min-height: 40px;
+          padding: 8px 10px;
+        }
+
+        .element-option {
+          min-height: 44px;
+        }
+
+        .shape-option {
+          min-height: 62px;
+        }
+
+        .dims-row input {
+          width: 80px;
+          min-height: 40px;
+          box-sizing: border-box;
+        }
+
+        .toggle-option {
+          min-height: 44px;
+        }
+
+        .inspector-drawer {
+          top: auto;
+          right: 8px;
+          bottom: 0;
+          left: 8px;
+          width: auto;
+          max-height: 75dvh;
+          padding: 14px;
+          border-left: none;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 14px 14px 0 0;
+          transform: translateY(100%);
+        }
+
+        .inspector-drawer.open {
+          transform: translateY(0);
+        }
+
+        .hover-chip {
+          max-width: calc(100% - 24px);
+          box-sizing: border-box;
+        }
+
+        .spatial-map-host {
+          touch-action: none;
+          user-select: none;
+          -webkit-user-select: none;
+        }
+      }
+
+      @media (max-width: 420px) {
+        .toolbar {
+          margin: 4px;
+          gap: 4px;
+        }
+
+        .search-panel {
+          top: 6px;
+          left: 6px;
+          right: 6px;
+          max-height: calc(100% - 12px);
+        }
+
+        .search-result {
+          grid-template-columns: 48px minmax(0, 1fr);
+          grid-template-rows: auto auto;
+          align-items: start;
+        }
+
+        .search-table-head {
+          display: none;
+        }
+
+        .search-result-status {
+          grid-column: 2;
+          grid-row: 2;
+          justify-self: start;
+        }
+      }
+
     `,
   ],
 })
