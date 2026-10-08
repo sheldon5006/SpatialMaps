@@ -126,3 +126,52 @@
 .ai-test-error {
   background: rgba(127, 29, 29, 0.45);
 }
+
+
+@media (max-width: 700px) {
+  .ai-test-panel {
+    left: 10px;
+    right: 10px;
+    bottom: 10px;
+    width: auto;
+    max-width: none;
+    padding: 14px;
+  }
+
+  .ai-test-header h2 {
+    font-size: 16px;
+  }
+
+  .ai-test-input {
+    gap: 8px;
+  }
+
+  .ai-test-input input {
+    min-width: 0;
+    height: 44px;
+  }
+
+  .ai-test-input button {
+    min-width: 78px;
+    height: 44px;
+    padding: 0 12px;
+  }
+}
+
+@media (max-width: 420px) {
+  .ai-test-header {
+    align-items: flex-start;
+  }
+
+  .connection-badge {
+    display: none;
+  }
+
+  .ai-test-input {
+    flex-direction: column;
+  }
+
+  .ai-test-input button {
+    width: 100%;
+  }
+}
