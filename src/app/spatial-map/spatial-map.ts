@@ -267,9 +267,13 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
               </div>
             }
 
-            @if (searchListOpen() && searchQuery() && searchResults().length > 0) {
+            @if (searchListOpen() && (!searchQuery() || searchResults().length > 0)) {
               <div class="search-summary">
-                {{ searchMatches().length }} matching {{ searchMatches().length === 1 ? 'booth' : 'booths' }}
+                @if (searchQuery()) {
+                  {{ searchMatches().length }} matching {{ searchMatches().length === 1 ? 'booth' : 'booths' }}
+                } @else {
+                  {{ searchableBooths().length }} booths
+                }
               </div>
 
               <div class="search-table-head" aria-hidden="true">
@@ -295,6 +299,11 @@ const SEARCH_PANEL_PADDING = { top: 24, right: 24, bottom: 24, left: 340 };
                       {{ statusLabel(space.properties.status) }}
                     </span>
                   </button>
+                } @empty {
+                  <div class="search-empty">
+                    <strong>No booths found</strong>
+                    <span>Try a booth ID, name or status.</span>
+                  </div>
                 }
               </div>
             }
@@ -1781,7 +1790,7 @@ export class SpatialMap implements AfterViewInit, OnChanges, OnDestroy {
 
   protected readonly searchResults = computed(() => {
     const query = this.searchQuery().trim().toLowerCase();
-    if (!query) return this.searchableBooths().slice(0, 12);
+    if (!query) return this.searchableBooths();
     return this.searchMatches().slice(0, 20);
   });
 
